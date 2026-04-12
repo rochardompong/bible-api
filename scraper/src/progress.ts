@@ -1,4 +1,4 @@
-import type { ScrapeProgress, ScrapePhase } from "../../types/index";
+import type { ScrapeProgress, ScrapePhase } from "../../types/index.d";
 import { r2Get, r2Put } from "./r2";
 
 const PROGRESS_KEY = "state/progress.json";

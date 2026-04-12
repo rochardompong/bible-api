@@ -11,7 +11,7 @@ import {
   phaseVersesList,
   phaseVersesText,
 } from "./phases";
-import type { FailedRequest } from "../../types/index";
+import type { FailedRequest } from "../../types/index.d";
 
 // ============================================================
 // Validate required environment variables

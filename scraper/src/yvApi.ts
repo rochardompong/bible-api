@@ -1,4 +1,4 @@
-import type { FailedRequest } from "../../types/index";
+import type { FailedRequest } from "../../types/index.d";
 import { r2Get, r2Put } from "./r2";
 
 const YV_API_BASE = "https://api.youversion.com";
