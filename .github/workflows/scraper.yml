@@ -17,6 +17,9 @@ on:
           - "false"
           - "true"
 
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
+
 jobs:
   scrape:
     name: Scrape YouVersion Bible Data
@@ -51,20 +54,6 @@ jobs:
           R2_BUCKET_NAME: ${{ secrets.R2_BUCKET_NAME }}
         run: |
           echo "Resetting progress state..."
-          node -e "
-            const { S3Client, DeleteObjectCommand } = require('@aws-sdk/client-s3');
-            const s3 = new S3Client({
-              region: 'auto',
-              endpoint: 'https://' + process.env.R2_ACCOUNT_ID + '.r2.cloudflarestorage.com',
-              credentials: {
-                accessKeyId: process.env.R2_ACCESS_KEY_ID,
-                secretAccessKey: process.env.R2_SECRET_ACCESS_KEY,
-              }
-            });
-            s3.send(new DeleteObjectCommand({ Bucket: process.env.R2_BUCKET_NAME, Key: 'state/progress.json' }))
-              .then(() => console.log('Progress reset.'))
-              .catch(console.error);
-          "
 
       - name: Run scraper
         env:
