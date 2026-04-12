@@ -1,0 +1,8 @@
+{
+  "name": "@bible-mirror/types",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared type definitions for Bible Mirror project",
+  "main": "index.ts",
+  "types": "index.ts"
+}

@@ -1,0 +1,8 @@
+packages:
+  - scraper
+  - worker
+  - types
+allowBuilds:
+  esbuild: true
+  sharp: true
+  workerd: true
