@@ -9,7 +9,8 @@ import type {
   Verse,
   VerseData,
   VotdYear,
-} from "../../types/index";
+} from "../../types/index.d";
+
 import { r2Exists, r2Put } from "./r2";
 import { yvFetch, yvFetchAll, isSessionBudgetExhausted } from "./yvApi";
 import { advancePhase, getProgress, saveProgress } from "./progress";
@@ -79,9 +80,6 @@ export async function phaseLanguages(): Promise<void> {
 
   // Fetch individual language detail for each language in our 50 bibles
   const p = getProgress();
-  const bibles = (
-    (await import("../../types/index")) as never
-  );
 
   // Get language tags from selected bibles
   const selectedBibles = await (async () => {
