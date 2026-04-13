@@ -9,42 +9,25 @@ import { languages } from "./routes/languages";
 import { votd } from "./routes/votd";
 import { user } from "./routes/user";
 
-// ============================================================
-// App setup
-// ============================================================
-
 const app = new Hono<{ Bindings: Env; Variables: ContextVariables }>();
 
-// ── Global middleware ───────────────────────────────────────
-
 app.use("*", logger());
+app.use("*", cors({
+  origin: "*",
+  allowHeaders: ["Authorization", "Content-Type", "X-API-Key"],
+  allowMethods: ["GET", "OPTIONS"],
+  maxAge: 86400,
+}));
 
-app.use(
-  "*",
-  cors({
-    origin: "*",
-    allowHeaders: ["Authorization", "Content-Type", "X-API-Key"],
-    allowMethods: ["GET", "OPTIONS"],
-    maxAge: 86400,
-  })
+// Public endpoints
+app.get("/health", (c) =>
+  c.json({ ok: true, status: "healthy", version: c.env.API_VERSION, timestamp: new Date().toISOString() })
 );
 
-// ── Public endpoints (no auth) ──────────────────────────────
-
-app.get("/health", (c) => {
-  return c.json({
-    ok: true,
-    status: "healthy",
-    version: c.env.API_VERSION,
-    timestamp: new Date().toISOString(),
-  });
-});
-
-app.get("/", (c) => {
-  return c.json({
+app.get("/", (c) =>
+  c.json({
     name: "Bible Mirror API",
     version: c.env.API_VERSION,
-    description: "YouVersion Bible data mirror — Firebase Auth required",
     auth: "Authorization: Bearer <firebase-id-token>",
     endpoints: {
       public: ["GET /health", "GET /"],
@@ -66,73 +49,48 @@ app.get("/", (c) => {
         "GET /api/v1/votd/today",
         "GET /api/v1/votd/:year",
         "GET /api/v1/votd/:year/:day",
-        "GET /state/progress",
-        "GET /state/selected-bibles",
       ],
+      internal: ["GET /state/progress  (X-API-Key)", "GET /state/selected-bibles  (X-API-Key)"],
     },
-  });
-});
+  })
+);
 
-// ── Authenticated routes ────────────────────────────────────
-
+// Authenticated routes
 const api = new Hono<{ Bindings: Env; Variables: ContextVariables }>();
-
-// Apply Firebase auth middleware to ALL /api/v1/* routes
 api.use("*", firebaseAuth);
 
-// Ping — verify token + measure latency on app startup
 api.get("/ping", (c) => {
   const u = c.get("user");
-  return successResponse(c, {
-    pong: true,
-    uid: u.uid,
-    timestamp: new Date().toISOString(),
-  });
+  return successResponse(c, { pong: true, uid: u.uid, timestamp: new Date().toISOString() });
 });
 
-// User info decoded from Firebase JWT — zero R2 calls
 api.route("/me", user);
-
-// Bible data
 api.route("/bibles", bibles);
-
-// Languages
 api.route("/languages", languages);
-
-// Verse of the Day (includes /today shortcut)
 api.route("/votd", votd);
 
-// Mount versioned API
 app.route("/api/v1", api);
 
-// ── State endpoints (internal key protected) ────────────────
-
+// Internal state endpoints
 app.get("/state/progress", async (c) => {
-  if (c.req.header("X-API-Key") !== c.env.API_SECRET_KEY) {
+  if (c.req.header("X-API-Key") !== c.env.API_SECRET_KEY)
     return errorResponse(c, "UNAUTHORIZED", "X-API-Key required.", 401);
-  }
   const obj = await c.env.BIBLE_BUCKET.get("state/progress.json");
-  if (!obj) return errorResponse(c, "NOT_FOUND", "Progress not found.", 404);
+  if (!obj) return errorResponse(c, "NOT_FOUND", "Progress file not found.", 404);
   return c.json(await obj.json(), 200);
 });
 
 app.get("/state/selected-bibles", async (c) => {
-  if (c.req.header("X-API-Key") !== c.env.API_SECRET_KEY) {
+  if (c.req.header("X-API-Key") !== c.env.API_SECRET_KEY)
     return errorResponse(c, "UNAUTHORIZED", "X-API-Key required.", 401);
-  }
   const obj = await c.env.BIBLE_BUCKET.get("state/selected-bibles.json");
   if (!obj) return errorResponse(c, "NOT_FOUND", "Selected bibles not found.", 404);
   return c.json(await obj.json(), 200);
 });
 
-// ── 404 & error handlers ────────────────────────────────────
-
-app.notFound((c) =>
-  errorResponse(c, "NOT_FOUND", `Route '${c.req.path}' not found.`, 404)
-);
-
+app.notFound((c) => errorResponse(c, "NOT_FOUND", `Route '${c.req.path}' not found.`, 404));
 app.onError((err, c) => {
-  console.error("[Unhandled error]", err);
+  console.error("[Error]", err);
   return errorResponse(c, "INTERNAL_ERROR", "An unexpected error occurred.", 500);
 });
 

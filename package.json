@@ -1,8 +1,8 @@
 {
   "name": "bible-mirror",
   "private": true,
-  "version": "1.0.0",
-  "description": "YouVersion Bible scraper + Cloudflare Workers API mirror",
+  "version": "2.0.0",
+  "description": "YouVersion Bible scraper + Cloudflare Workers API — Hono.js + Firebase Auth",
   "scripts": {
     "scraper:build": "pnpm --filter scraper build",
     "scraper:run": "pnpm --filter scraper start",

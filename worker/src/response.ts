@@ -1,45 +1,29 @@
 import type { Context } from "hono";
 import type { Env, ContextVariables } from "./types";
 
-type WorkerContext = Context<{ Bindings: Env; Variables: ContextVariables }>;
+export type ErrorCode = "UNAUTHORIZED"|"FORBIDDEN"|"NOT_FOUND"|"DATA_NOT_READY"|"BAD_REQUEST"|"METHOD_NOT_ALLOWED"|"INTERNAL_ERROR";
 
-// ============================================================
-// Standardized API Response Helpers
-// ============================================================
+export interface ApiMeta { cached: boolean; timestamp: string; version: string; }
+export interface ApiSuccess<T> { ok: true; data: T; meta: ApiMeta; }
+export interface ApiError { ok: false; error: { code: ErrorCode; message: string; status: number }; }
 
-interface SuccessBody {
-  ok: true;
-  data: unknown;
-}
+type Ctx = Context<{ Bindings: Env; Variables: ContextVariables }>;
 
-interface ErrorBody {
-  ok: false;
-  error: {
-    code: string;
-    message: string;
+export function successResponse<T>(c: Ctx, data: T, opts: { status?: number; cached?: boolean } = {}): Response {
+  const { status = 200, cached = false } = opts;
+  const cacheTtl = parseInt(c.env.CACHE_TTL ?? "86400", 10);
+  const body: ApiSuccess<T> = {
+    ok: true, data,
+    meta: { cached, timestamp: new Date().toISOString(), version: c.env.API_VERSION ?? "2" },
   };
+  return c.json(body, status, {
+    "Cache-Control": cached ? `public, max-age=${cacheTtl}` : "no-store",
+    "Access-Control-Allow-Origin": "*",
+    "X-Bible-Mirror": c.env.API_VERSION ?? "2",
+  });
 }
 
-/**
- * Return a standard success JSON response.
- */
-export function successResponse(c: WorkerContext, data: unknown, status: number = 200) {
-  const body: SuccessBody = { ok: true, data };
-  return c.json(body, status as any);
-}
-
-/**
- * Return a standard error JSON response.
- */
-export function errorResponse(
-  c: WorkerContext,
-  code: string,
-  message: string,
-  status: number = 400
-) {
-  const body: ErrorBody = {
-    ok: false,
-    error: { code, message },
-  };
-  return c.json(body, status as any);
+export function errorResponse(c: Ctx, code: ErrorCode, message: string, status: number): Response {
+  const body: ApiError = { ok: false, error: { code, message, status } };
+  return c.json(body, status, { "Cache-Control": "no-store", "Access-Control-Allow-Origin": "*" });
 }

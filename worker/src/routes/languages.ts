@@ -1,26 +1,22 @@
 import { Hono } from "hono";
 import type { Env, ContextVariables } from "../types";
 import { successResponse, errorResponse } from "../response";
+import { fetchFromR2 } from "../r2fetch";
+import { keyLanguages, keyLanguage } from "../r2keys";
 
-// ============================================================
-// Language Routes — /api/v1/languages/*
-// ============================================================
+const languages = new Hono<{ Bindings: Env; Variables: ContextVariables }>();
 
-export const languages = new Hono<{ Bindings: Env; Variables: ContextVariables }>();
-
-// GET /languages — list all languages
 languages.get("/", async (c) => {
-  const obj = await c.env.BIBLE_BUCKET.get("v1/languages.json");
-  if (!obj) return errorResponse(c as any, "NOT_FOUND", "Languages not found.", 404);
-  const data = await obj.json();
-  return successResponse(c as any, data);
+  const r = await fetchFromR2(c.env.BIBLE_BUCKET, keyLanguages(), parseInt(c.env.CACHE_TTL));
+  if (!r) return errorResponse(c, "DATA_NOT_READY", "Language list not yet available.", 503);
+  return successResponse(c, r.data, { cached: r.cached });
 });
 
-// GET /languages/:langId — single language detail
 languages.get("/:langId", async (c) => {
   const { langId } = c.req.param();
-  const obj = await c.env.BIBLE_BUCKET.get(`v1/languages/${langId}.json`);
-  if (!obj) return errorResponse(c as any, "NOT_FOUND", `Language ${langId} not found.`, 404);
-  const data = await obj.json();
-  return successResponse(c as any, data);
+  const r = await fetchFromR2(c.env.BIBLE_BUCKET, keyLanguage(langId), parseInt(c.env.CACHE_TTL));
+  if (!r) return errorResponse(c, "NOT_FOUND", `Language '${langId}' not found.`, 404);
+  return successResponse(c, r.data, { cached: r.cached });
 });
+
+export { languages };

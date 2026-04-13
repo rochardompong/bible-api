@@ -3,18 +3,15 @@ main = "src/index.ts"
 compatibility_date = "2024-09-23"
 compatibility_flags = ["nodejs_compat"]
 
-# R2 bucket binding — no credentials needed, Workers native access
 [[r2_buckets]]
 binding = "BIBLE_BUCKET"
-bucket_name = "bible-mirror"         # Change to your actual R2 bucket name
-# preview_bucket_name = "bible-mirror-dev"   # optional dev bucket
+bucket_name = "bible-mirror"
 
-# Environment variables (non-secret)
 [vars]
 API_VERSION = "2"
-CACHE_TTL = "86400"          # 24 hours — Bible data cache
-JWKS_CACHE_TTL = "21600"     # 6 hours — Google public keys cache
+CACHE_TTL = "86400"
+JWKS_CACHE_TTL = "21600"
 
-# Secrets — set via `wrangler secret put <NAME>`
-# FIREBASE_PROJECT_ID  = "your-firebase-project-id"
-# API_SECRET_KEY       = "your-internal-scraper-key"
+# Secrets — set via terminal:
+#   wrangler secret put FIREBASE_PROJECT_ID
+#   wrangler secret put API_SECRET_KEY

@@ -19,9 +19,6 @@ export const s3 = new S3Client({
   },
 });
 
-/**
- * Read a JSON object from R2. Returns null if the key does not exist.
- */
 export async function r2Get<T>(key: string): Promise<T | null> {
   try {
     const cmd = new GetObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key });
@@ -29,17 +26,15 @@ export async function r2Get<T>(key: string): Promise<T | null> {
     const body = await res.Body?.transformToString("utf-8");
     if (!body) return null;
     return JSON.parse(body) as T;
-  } catch (err: any) {
-    if (err?.name === "NoSuchKey" || err?.$metadata?.httpStatusCode === 404) {
+  } catch (err: unknown) {
+    const e = err as { name?: string; $metadata?: { httpStatusCode?: number } };
+    if (e?.name === "NoSuchKey" || e?.$metadata?.httpStatusCode === 404) {
       return null;
     }
     throw err;
   }
 }
 
-/**
- * Write a JSON object to R2 with the given key.
- */
 export async function r2Put(key: string, data: unknown): Promise<void> {
   const body = JSON.stringify(data, null, 2);
   const cmd = new PutObjectCommand({
@@ -52,9 +47,6 @@ export async function r2Put(key: string, data: unknown): Promise<void> {
   await s3.send(cmd);
 }
 
-/**
- * Check if a key already exists in R2 (avoids re-fetching already scraped data).
- */
 export async function r2Exists(key: string): Promise<boolean> {
   try {
     const cmd = new HeadObjectCommand({ Bucket: R2_BUCKET_NAME, Key: key });
