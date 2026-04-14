@@ -4,7 +4,7 @@ import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3'
 
 dotenv.config()
 
-const YOUVERSION_BASE = 'https://api.youversion.com'
+const YOUVERSION_BASE = 'https://api.youversion.com/v1'
 const API_KEY = process.env.YOUVERSION_API_KEY
 const R2_BUCKET = process.env.R2_BUCKET_NAME || 'hybrid-bible-cache'
 const PRIORITY_LANGUAGES = process.env.PRIORITY_LANGUAGES ? process.env.PRIORITY_LANGUAGES.split(',') : ['ENG', 'IND']
