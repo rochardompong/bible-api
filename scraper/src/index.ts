@@ -72,7 +72,7 @@ async function scrapeBibles() {
 
   // Fetch sequentially per language to avoid 422 Unprocessable Entity on raw /bibles
   for (const lang of PRIORITY_LANGUAGES) {
-    const data = await fetchFromYV(`/bibles?language_tag=${lang}`)
+    const data = await fetchFromYV(`/bibles?language_ranges[]=${lang}`)
     if (data && data.data) {
       const biblesForLang = data.data
       const top3 = biblesForLang.slice(0, 3) // max 3 per lang (PRD)
