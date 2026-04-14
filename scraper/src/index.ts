@@ -68,27 +68,27 @@ async function scrapeLanguages() {
 
 async function scrapeBibles() {
   console.log('--- Scraping Bibles ---')
-  const data = await fetchFromYV('/bibles')
-  if (data) {
-    await saveToR2('bibles/index.json', data)
+  let targeted: any[] = []
 
-    // Filter to priority languages (limit to max 3 per language PRD)
-    const allBibles = data.data || []
-    let targeted: any[] = []
-
-    for (const lang of PRIORITY_LANGUAGES) {
-      const biblesForLang = allBibles.filter((b: any) => b.language?.tag?.toUpperCase() === lang.toUpperCase())
-      targeted = targeted.concat(biblesForLang.slice(0, 3)) // max 3 per lang
+  // Fetch sequentially per language to avoid 422 Unprocessable Entity on raw /bibles
+  for (const lang of PRIORITY_LANGUAGES) {
+    const data = await fetchFromYV(`/bibles?language_tag=${lang}`)
+    if (data && data.data) {
+      const biblesForLang = data.data
+      const top3 = biblesForLang.slice(0, 3) // max 3 per lang (PRD)
+      targeted = targeted.concat(top3)
     }
+  }
 
+  if (targeted.length > 0) {
+    await saveToR2('bibles/index.json', { data: targeted })
     // Save individually
     for (const bible of targeted) {
       await saveToR2(`bibles/${bible.id}.json`, { data: bible })
     }
-
-    return targeted
   }
-  return []
+
+  return targeted
 }
 
 async function runScrape() {
