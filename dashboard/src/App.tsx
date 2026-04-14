@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
-import { Activity, Settings, Server, RefreshCw, CheckCircle2, Database, Trash2, Search, FileJson, BarChart3, LineChart as LineChartIcon, ShieldCheck, XCircle, Loader2 } from 'lucide-react'
+import { Activity, Settings, Server, RefreshCw, CheckCircle2, Database, Trash2, Search, FileJson, BarChart3, LineChart as LineChartIcon, ShieldCheck, XCircle, Loader2, Globe, Zap, ChevronRight, Lock, Code, LogOut, BookOpen } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
-// Mock Data
+// Mock Data (Used in Dashboard Overview Charts)
 const volumeData = [
   { name: 'Mon', reqs: 4000 }, { name: 'Tue', reqs: 3000 }, { name: 'Wed', reqs: 5000 },
   { name: 'Thu', reqs: 7000 }, { name: 'Fri', reqs: 6000 }, { name: 'Sat', reqs: 9000 }, { name: 'Sun', reqs: 11000 }
@@ -13,29 +13,206 @@ const topBibles = [
   { id: 'ESV', requests: 12000 }, { id: 'BIMK', requests: 8000 }
 ];
 
+
+// --- Main Application Wrapper ---
 export default function App() {
+  const [route, setRoute] = useState('landing')
+  
+  // App Global State
+  const [workerAppKey, setWorkerAppKey] = useState(localStorage.getItem('workerAppKey') || '')
+  
+  const isAuthenticated = !!workerAppKey
+  
+  // Hash Routing
+  useEffect(() => {
+    const handleHash = () => {
+      const hash = window.location.hash.replace('#', '') || 'landing'
+      setRoute(hash)
+    }
+    window.addEventListener('hashchange', handleHash)
+    handleHash() // Read initial
+    return () => window.removeEventListener('hashchange', handleHash)
+  }, [])
+
+  // Public Navbar
+  const PublicNav = () => (
+    <nav className="fixed top-0 w-full z-50 bg-zinc-950/80 backdrop-blur-xl border-b border-zinc-800/50">
+      <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
+        <a href="#landing" className="flex items-center gap-2 text-zinc-100 font-bold tracking-tighter text-lg">
+          <Globe className="w-5 h-5 text-emerald-500" /> Hybrid Bible API
+        </a>
+        <div className="flex items-center gap-6 text-sm font-medium">
+          <a href="#docs" className="text-zinc-400 hover:text-zinc-100 transition-colors">Documentation</a>
+          {isAuthenticated ? (
+            <a href="#admin" className="text-emerald-400 hover:text-emerald-300 transition-colors flex items-center gap-2">
+              <Server className="w-4 h-4" /> Go to Console
+            </a>
+          ) : (
+             <a href="#login" className="bg-zinc-100 hover:bg-white text-zinc-900 px-4 py-2 rounded-full transition-colors flex items-center gap-2 font-bold">
+               <Lock className="w-3.5 h-3.5" /> Admin Login
+             </a>
+          )}
+        </div>
+      </div>
+    </nav>
+  )
+
+  return (
+    <div className="min-h-screen bg-zinc-950 text-zinc-300 font-sans selection:bg-emerald-500/30 selection:text-emerald-200">
+      {route !== 'admin' && route !== 'login' && <PublicNav />}
+      
+      {/* Route: Landing */}
+      {route === 'landing' && (
+        <main className="pt-32 pb-24 px-6 flex flex-col items-center justify-center min-h-screen animate-in fade-in zoom-in-95 duration-700">
+          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-emerald-900/20 via-zinc-950 to-zinc-950 -z-10" />
+          <div className="relative max-w-4xl mx-auto text-center space-y-8">
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-emerald-400 text-xs font-bold tracking-widest uppercase">
+              <Zap className="w-3.5 h-3.5" /> Kinetic System v1.0
+            </div>
+            <h1 className="text-5xl md:text-7xl font-extrabold text-white tracking-tighter leading-tight">
+              The Next-Gen <br/>
+              <span className="bg-clip-text text-transparent bg-gradient-to-r from-emerald-400 to-cyan-400">
+                Hybrid Bible Endpoint.
+              </span>
+            </h1>
+            <p className="text-lg md:text-xl text-zinc-400 max-w-2xl mx-auto leading-relaxed">
+              Decoupled scraping architecture hitting Cloudflare R2 Edge Cache. Lightning fast, natively analytical, built for massive offline scale.
+            </p>
+            <div className="flex flex-wrap justify-center gap-4 pt-4">
+              <a href="#docs" className="bg-emerald-500 hover:bg-emerald-400 text-zinc-950 px-8 py-3 rounded-full font-bold transition-all shadow-[0_0_40px_-10px_rgba(16,185,129,0.5)] flex items-center gap-2">
+                Explore Endpoints <ChevronRight className="w-4 h-4" />
+              </a>
+              <a href="https://github.com/rochardompong/bible-api" target="_blank" rel="noreferrer" className="bg-zinc-900 hover:bg-zinc-800 border border-zinc-800 text-zinc-300 px-8 py-3 rounded-full font-bold transition-all flex items-center gap-2">
+                <Code className="w-4 h-4" /> View Source
+              </a>
+            </div>
+          </div>
+        </main>
+      )}
+
+      {/* Route: Docs */}
+      {route === 'docs' && (
+        <main className="pt-32 pb-24 px-6 max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div className="space-y-12">
+             <header>
+               <h1 className="text-4xl font-extrabold text-white tracking-tight mb-4">API Documentation</h1>
+               <p className="text-zinc-400">Integrate the Hybrid Bible into your mobile applications using standard REST protocols.</p>
+             </header>
+
+             <div className="space-y-6">
+               <DocSection method="GET" path="/languages" desc="Get all available priority languages." />
+               <DocSection method="GET" path="/bibles" desc="Get the list of scraped bibles." />
+               <DocSection method="GET" path="/bibles/:bible_id/books" desc="Get all books for a specific bible (e.g. TB)." />
+               <DocSection method="GET" path="/bibles/:bible_id/chapters/:chapter_id/verses" desc="Get verses by chapter id (e.g. GEN.1)." />
+               <DocSection method="GET" path="/bibles/:bible_id/index" desc="Get custom offline-first bundled index of books and chapters." />
+               <DocSection method="GET" path="/verse_of_the_day/:year/:day" desc="Get the Verse of the Day (Day of year 1-365)." />
+               
+               <div className="bg-amber-500/10 border border-amber-500/20 p-6 rounded-2xl flex gap-4 mt-12 text-sm text-amber-200/80">
+                 <Lock className="w-5 h-5 text-amber-500 shrink-0" />
+                 <div>
+                   <strong className="text-amber-500 block mb-1">Important Implementation Detail</strong>
+                   Our worker API strictly enforces API protection. You must pass <code className="bg-black/30 px-1.5 py-0.5 rounded text-amber-500 font-mono text-xs">X-App-Key</code> header dynamically in your app to retrieve the payload.
+                 </div>
+               </div>
+             </div>
+           </div>
+        </main>
+      )}
+
+      {/* Route: Login */}
+      {route === 'login' && (
+        <main className="min-h-screen flex items-center justify-center p-6 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900 via-zinc-950 to-zinc-950 relative overflow-hidden">
+          <div className="absolute top-8 left-8">
+            <a href="#landing" className="text-zinc-500 hover:text-zinc-300 font-medium text-sm flex items-center gap-2 transition-colors">
+              <ChevronRight className="w-4 h-4 rotate-180" /> Back to Home
+            </a>
+          </div>
+          
+          <div className="w-full max-w-sm bg-zinc-900/50 backdrop-blur-xl border border-zinc-800/80 p-8 rounded-3xl shadow-2xl animate-in zoom-in-95 duration-500">
+            <div className="w-12 h-12 bg-emerald-500/10 rounded-2xl flex items-center justify-center mb-6 border border-emerald-500/20">
+               <ShieldCheck className="w-6 h-6 text-emerald-500" />
+            </div>
+            <h2 className="text-2xl font-bold text-white tracking-tight mb-2">Admin Identity</h2>
+            <p className="text-zinc-400 text-sm mb-8">Enter your Cloudflare Worker Authentication Key to unlock system access.</p>
+            
+            <form onSubmit={(e) => {
+              e.preventDefault();
+              const val = (e.target as any).elements.appkey.value;
+              setWorkerAppKey(val);
+              localStorage.setItem('workerAppKey', val);
+              window.location.hash = '#admin';
+            }}>
+              <div className="space-y-4">
+                <input 
+                  name="appkey"
+                  type="password" 
+                  required
+                  placeholder="X-App-Key Target..." 
+                  className="w-full bg-black/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-xl px-4 py-3 text-sm text-zinc-200 outline-none transition-all placeholder:text-zinc-600"
+                />
+                <button type="submit" className="w-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-bold py-3 rounded-xl transition-colors">
+                  Unlock Console
+                </button>
+              </div>
+            </form>
+          </div>
+        </main>
+      )}
+
+      {/* Route: Admin Dashboard */}
+      {route === 'admin' && (
+        <AdminDashboard 
+          workerAppKey={workerAppKey} 
+          setWorkerAppKey={setWorkerAppKey}
+          onLogout={() => {
+            setWorkerAppKey('');
+            localStorage.removeItem('workerAppKey');
+            window.location.hash = '#landing';
+          }}
+        />
+      )}
+    </div>
+  )
+}
+
+function DocSection({ method, path, desc }: { method: string, path: string, desc: string }) {
+  return (
+    <div className="bg-zinc-900/50 border border-zinc-800 rounded-2xl overflow-hidden hover:border-zinc-700 transition-colors">
+      <div className="flex flex-col md:flex-row md:items-center gap-4 bg-zinc-900 px-5 py-4 border-b border-zinc-800">
+        <span className={`px-2 py-1 rounded text-xs font-bold tracking-wider ${method === 'GET' ? 'bg-blue-500/10 text-blue-400 border border-blue-500/20' : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'}`}>
+          {method}
+        </span>
+        <code className="text-zinc-300 font-mono text-sm break-all">{path}</code>
+      </div>
+      <div className="px-5 py-4 text-sm text-zinc-400">
+        {desc}
+      </div>
+    </div>
+  )
+}
+
+// ------------------------------------------------------------
+// COMPACT DASHBOARD LOGIC FROM EARLIER (WRAPPED AS COMPONENT)
+// ------------------------------------------------------------
+function AdminDashboard({ workerAppKey, setWorkerAppKey, onLogout }: any) {
   const [activeTab, setActiveTab] = useState('overview')
   
-  // Settings State
+  // Settings Global States
   const [ghRepo, setGhRepo] = useState(localStorage.getItem('ghRepo') || 'owner/repo')
   const [ghToken, setGhToken] = useState(localStorage.getItem('ghToken') || '')
   const [workerUrl, setWorkerUrl] = useState(localStorage.getItem('workerUrl') || 'http://127.0.0.1:8787')
-  const [workerAppKey, setWorkerAppKey] = useState(localStorage.getItem('workerAppKey') || '')
   
-  // Data Control State
   const [r2Files, setR2Files] = useState<any[]>([])
   const [r2Prefix, setR2Prefix] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
   
-  // Analytics State
   const [analyticsTab, setAnalyticsTab] = useState('usage')
 
   useEffect(() => {
     localStorage.setItem('ghRepo', ghRepo)
     localStorage.setItem('ghToken', ghToken)
     localStorage.setItem('workerUrl', workerUrl)
-    localStorage.setItem('workerAppKey', workerAppKey)
-  }, [ghRepo, ghToken, workerUrl, workerAppKey])
+  }, [ghRepo, ghToken, workerUrl])
 
   // --- Handlers ---
   const triggerGithubAction = async (target: string, setStatus?: (s: string) => void) => {
@@ -116,15 +293,14 @@ export default function App() {
   }
 
   return (
-    <div className="min-h-screen bg-zinc-950 text-zinc-300 flex flex-col md:flex-row font-sans selection:bg-zinc-800">
-      
+    <div className="flex flex-col md:flex-row h-screen overflow-hidden animate-in fade-in duration-500">
       {/* Sidebar */}
-      <aside className="w-full md:w-64 bg-zinc-900/50 border-r border-zinc-800/80 md:h-screen sticky top-0 px-5 py-8 flex flex-col gap-6">
+      <aside className="w-full md:w-64 bg-zinc-900/50 border-r border-zinc-800/80 md:h-screen shrink-0 px-5 py-8 flex flex-col gap-6 overflow-y-auto">
         <div>
-          <span className="text-[10px] font-bold tracking-widest uppercase text-zinc-500 mb-2 block">Admin Console</span>
+          <span className="text-[10px] font-bold tracking-widest uppercase text-emerald-500/70 mb-2 block">Secure Session</span>
           <h1 className="text-lg font-bold tracking-tight text-zinc-100 flex items-center gap-2">
             <Server className="w-4 h-4 text-emerald-500" />
-            Hybrid Bible
+            Hybrid Console
           </h1>
         </div>
 
@@ -136,18 +312,23 @@ export default function App() {
           {SidebarItem('settings', 'Settings', Settings, activeTab, setActiveTab)}
         </nav>
 
-        <div className="mt-auto flex items-center justify-between p-3 rounded-xl bg-zinc-900 border border-zinc-800">
-          <div className="flex items-center gap-2">
-            <div className="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
-            <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Online</span>
+        <div className="mt-auto space-y-2">
+          <div className="flex items-center justify-between p-3 rounded-xl bg-zinc-900/80 border border-emerald-900/30">
+            <div className="flex items-center gap-2">
+              <div className="w-2 h-2 rounded-full bg-emerald-500 ring-4 ring-emerald-500/20" />
+              <span className="text-xs font-semibold text-emerald-500 uppercase tracking-wider">Online</span>
+            </div>
           </div>
+          <button onClick={onLogout} className="w-full text-left flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium text-red-400 hover:text-red-300 hover:bg-red-950/30 transition-colors">
+            <LogOut className="w-4 h-4" /> End Session
+          </button>
         </div>
       </aside>
 
       {/* Main Content Area */}
-      <main className="flex-1 p-6 md:p-12 overflow-y-auto">
+      <main className="flex-1 p-6 md:p-12 overflow-y-auto bg-zinc-950">
         
-        {/* OVERVIEW PHASE 1 */}
+        {/* OVERVIEW */}
         {activeTab === 'overview' && (
           <div className="space-y-8 max-w-6xl animate-in fade-in duration-500">
             <header>
@@ -161,7 +342,7 @@ export default function App() {
               <MetricCard title="Error Rate" value="0.05%" color="emerald" desc="Target < 1%" />
               <MetricCard title="Quota Usage" value="880/1000" color="amber" desc="Req/h User" />
               <MetricCard title="Global Latency" value="42ms" color="emerald" desc="R2 Cache Hit" />
-              <MetricCard title="Last Scraper Run" value="SUCCESS" color="emerald" desc="12 mins ago" />
+              <MetricCard title="Last Run" value="SUCCESS" color="emerald" desc="12 mins ago" />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
@@ -183,7 +364,9 @@ export default function App() {
               </div>
               
               <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
-                 <h3 className="text-sm font-semibold text-zinc-100 mb-6">Top 5 Bibles</h3>
+                 <h3 className="text-sm font-semibold text-zinc-100 mb-6 flex items-center gap-2">
+                   <BookOpen className="w-4 h-4 text-zinc-400" /> Top 5 Bibles Focus
+                 </h3>
                  <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topBibles} layout="vertical" margin={{ left: 0, right: 0 }}>
@@ -191,7 +374,7 @@ export default function App() {
                       <XAxis type="number" stroke="#52525b" fontSize={12} hide />
                       <YAxis dataKey="id" type="category" stroke="#a1a1aa" fontSize={12} tickLine={false} axisLine={false} />
                       <Tooltip cursor={{fill: '#27272a'}} contentStyle={{ backgroundColor: '#18181b', borderColor: '#27272a', borderRadius: '8px' }} />
-                      <Bar dataKey="requests" fill="#3b82f6" radius={[0, 4, 4, 0]} barSize={20} />
+                      <Bar dataKey="requests" fill="#10b981" radius={[0, 4, 4, 0]} barSize={20} />
                     </BarChart>
                   </ResponsiveContainer>
                  </div>
@@ -200,7 +383,7 @@ export default function App() {
           </div>
         )}
 
-        {/* SCRAPER CONTROL */}
+        {/* SCRAPER */}
         {activeTab === 'scraper' && (
           <div className="space-y-8 max-w-5xl animate-in fade-in duration-500">
             <header>
@@ -223,23 +406,23 @@ export default function App() {
                   <ScraperTableRow title="Bibles" tag="Max 3/lang" triggerFn={triggerGithubAction} target="bibles" />
                   <ScraperTableRow title="Books & Chapters" tag="With index generation" triggerFn={triggerGithubAction} target="books" />
                   <ScraperTableRow title="Verse of the Day" tag="Daily buffer" triggerFn={triggerGithubAction} target="votd" />
-                  <ScraperTableRow title="Full Scrape Sequence" tag="Heavy" triggerFn={triggerGithubAction} target="all" isPrimary />
+                  <ScraperTableRow title="Force Total Override" tag="Heaviest Task" triggerFn={triggerGithubAction} target="all" isPrimary />
                 </tbody>
               </table>
             </div>
           </div>
         )}
 
-        {/* DATA CONTROL PHASE 2 */}
+        {/* DATA CONTROL */}
         {activeTab === 'datacontrol' && (
-          <div className="space-y-6 max-w-6xl animate-in fade-in duration-500">
+           <div className="space-y-6 max-w-6xl animate-in fade-in duration-500">
             <header className="flex flex-col md:flex-row justify-between items-start md:items-end mb-8 gap-4">
               <div>
-                <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">R2 Data Control</h2>
+                <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Data Controller</h2>
                 <p className="text-sm text-zinc-500 mt-1">Browse, invalidate, and manage Cloudflare R2 cache contents.</p>
               </div>
-              <button onClick={bulkDeleteBible} className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2 rounded-lg text-xs font-bold tracking-wide transition-colors flex items-center gap-2">
-                <Trash2 className="w-3.5 h-3.5" /> BULK DELETE PER BIBLE ID
+              <button onClick={bulkDeleteBible} className="bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white px-4 py-2.5 rounded-xl text-xs font-bold tracking-wide transition-colors flex items-center gap-2">
+                <Trash2 className="w-3.5 h-3.5" /> BULK DELETE CACHE
               </button>
             </header>
 
@@ -251,218 +434,35 @@ export default function App() {
                     <Search className="w-4 h-4 text-zinc-500 absolute left-3 top-1/2 -translate-y-1/2" />
                     <input 
                       type="text" value={r2Prefix} onChange={(e) => setR2Prefix(e.target.value)}
-                      placeholder="Filter path prefix (e.g. bibles/TB)" 
-                      className="w-full bg-zinc-900 border border-zinc-700 focus:border-zinc-500 rounded-lg pl-10 pr-4 py-2 text-sm text-zinc-200 outline-none transition-colors"
+                      placeholder="Prefix filter (e.g. bibles/TB)" 
+                      className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-500 rounded-lg pl-10 pr-4 py-2 text-sm text-zinc-200 outline-none transition-colors"
                     />
                   </div>
-                  <button onClick={fetchR2Files} className="bg-zinc-100 text-zinc-900 hover:bg-white px-4 py-2 rounded-lg font-semibold text-sm transition-colors shadow-sm">
-                    Browse
+                  <button onClick={fetchR2Files} className="bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500 hover:text-zinc-900 px-6 border border-emerald-500/20 py-2 rounded-lg font-bold text-sm transition-colors shadow-sm">
+                    Query Block
                   </button>
                 </div>
 
                 <div className="flex-1 overflow-y-auto border border-zinc-800/50 rounded-lg bg-zinc-900/20">
                   {r2Files.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-sm text-zinc-600">Hit Browse to list files</div>
+                    <div className="h-full flex items-center justify-center text-sm text-zinc-600">Hit Query Block to query cache nodes</div>
                   ) : (
                     <table className="w-full text-left text-sm">
-                      <thead className="sticky top-0 bg-zinc-900 text-zinc-500 text-xs border-b border-zinc-800">
+                      <thead className="sticky top-0 bg-zinc-900 text-zinc-500 text-xs border-b border-zinc-800 shadow-sm">
                         <tr>
-                          <th className="px-4 py-2">Path</th>
-                          <th className="px-4 py-2">Size</th>
-                          <th className="px-4 py-2 text-right">Actions</th>
+                          <th className="px-4 py-3">R2 Path Key</th>
+                          <th className="px-4 py-3">Size</th>
+                          <th className="px-4 py-3 text-right">Actions</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-zinc-800/50">
                         {r2Files.map(file => (
                           <tr key={file.key} className="hover:bg-zinc-800/30 group">
-                            <td className="px-4 py-3 font-medium text-zinc-300 truncate max-w-[200px] cursor-pointer" onClick={() => previewR2File(file.key)}>{file.key}</td>
+                            <td className="px-4 py-3 font-mono text-zinc-300 truncate max-w-[200px] cursor-pointer hover:text-emerald-400 transition-colors" onClick={() => previewR2File(file.key)}>{file.key}</td>
                             <td className="px-4 py-3 text-zinc-500 text-xs">{Math.round(file.size/1024)} KB</td>
                             <td className="px-4 py-3 text-right">
                               <div className="flex items-center justify-end gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button onClick={() => previewR2File(file.key)} className="p-1.5 text-zinc-400 hover:text-zinc-100 hover:bg-zinc-700 rounded"><FileJson className="w-4 h-4" /></button>
+                                <button onClick={() => previewR2File(file.key)} className="p-1.5 text-zinc-400 hover:text-emerald-400 hover:bg-emerald-400/10 rounded"><FileJson className="w-4 h-4" /></button>
                                 <button onClick={() => deleteR2File(file.key)} className="p-1.5 text-zinc-500 hover:text-red-400 hover:bg-red-400/10 rounded"><Trash2 className="w-4 h-4" /></button>
                               </div>
                             </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-
-              {/* Preview JSON */}
-              <div className="flex-1 bg-zinc-900 border border-zinc-800 rounded-2xl flex flex-col max-h-[600px]">
-                <div className="p-4 border-b border-zinc-800 flex items-center justify-between bg-zinc-900/80 rounded-t-2xl">
-                  <h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2"><FileJson className="w-4 h-4 text-emerald-500" /> Read-Only Preview</h3>
-                  {previewData && <button onClick={() => setPreviewData(null)} className="text-xs text-zinc-500 hover:text-zinc-300">Clear</button>}
-                </div>
-                <div className="flex-1 p-4 overflow-auto bg-[#0d0d0f] rounded-b-2xl">
-                  {previewData ? (
-                    <pre className="text-[11px] font-mono text-emerald-400/90 whitespace-pre-wrap">{previewData}</pre>
-                  ) : (
-                    <div className="h-full flex items-center justify-center text-xs text-zinc-600 font-mono">Select a file to view raw JSON</div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* ANALYTICS PHASE 3 */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-6 max-w-6xl animate-in fade-in duration-500">
-             <header className="mb-6">
-              <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">Advanced Analytics</h2>
-              <p className="text-sm text-zinc-500 mt-1">Worker aggregated metrics for Usage, Search, and Offline Downloads.</p>
-            </header>
-
-            <div className="flex gap-2 border-b border-zinc-800 pb-px mb-6">
-              <AnalyticsTab title="Usage" active={analyticsTab === 'usage'} onClick={() => setAnalyticsTab('usage')} />
-              <AnalyticsTab title="Search" active={analyticsTab === 'search'} onClick={() => setAnalyticsTab('search')} />
-              <AnalyticsTab title="Download" active={analyticsTab === 'download'} onClick={() => setAnalyticsTab('download')} />
-            </div>
-
-            {analyticsTab === 'usage' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
-                  <h3 className="text-sm font-semibold mb-4 text-zinc-300">Request Volume Trend (30 Days)</h3>
-                  <div className="h-64 flex items-center justify-center bg-zinc-900/20 rounded-xl border border-zinc-800/50"><span className="text-zinc-600 text-sm">Line Chart Placeholder</span></div>
-                </div>
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
-                  <h3 className="text-sm font-semibold mb-4 text-zinc-300">Top 10 Bibles Accessed</h3>
-                  <div className="h-64 flex items-center justify-center bg-zinc-900/20 rounded-xl border border-zinc-800/50"><span className="text-zinc-600 text-sm">Bar Chart Placeholder</span></div>
-                </div>
-              </div>
-            )}
-
-            {analyticsTab === 'search' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-0 overflow-hidden">
-                  <div className="p-4 border-b border-zinc-800 bg-zinc-900/60"><h3 className="text-sm font-semibold text-zinc-300">Top Search Queries</h3></div>
-                  <table className="w-full text-sm text-left"><thead className="bg-zinc-800/30 text-zinc-500 text-xs"><tr><th className="px-4 py-2">Query</th><th className="px-4 py-2 text-right">Volume</th></tr></thead><tbody className="divide-y divide-zinc-800/50"><tr><td className="px-4 py-3 text-zinc-300">kasih</td><td className="px-4 py-3 text-right text-zinc-500">14.2k</td></tr><tr><td className="px-4 py-3 text-zinc-300">daud</td><td className="px-4 py-3 text-right text-zinc-500">8.1k</td></tr></tbody></table>
-                </div>
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-0 overflow-hidden">
-                  <div className="p-4 border-b border-zinc-800 bg-zinc-900/60"><h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">Zero-Result Queries <span className="px-2 py-0.5 rounded text-[10px] bg-red-500/20 text-red-400">Attention</span></h3></div>
-                  <table className="w-full text-sm text-left"><thead className="bg-zinc-800/30 text-zinc-500 text-xs"><tr><th className="px-4 py-2">Query</th><th className="px-4 py-2 text-right">Volume</th></tr></thead><tbody className="divide-y divide-zinc-800/50"><tr><td className="px-4 py-3 text-zinc-300">mazmur 189</td><td className="px-4 py-3 text-right text-red-400/80">420</td></tr></tbody></table>
-                </div>
-              </div>
-            )}
-
-            {analyticsTab === 'download' && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-6">
-                  <h3 className="text-sm font-semibold mb-4 text-zinc-300">Top Downloaded Bibles</h3>
-                  <div className="h-64 flex items-center justify-center bg-zinc-900/20 rounded-xl border border-zinc-800/50"><span className="text-zinc-600 text-sm">Bar Chart Placeholder</span></div>
-                </div>
-                <div className="bg-zinc-900/40 border border-zinc-800 rounded-2xl p-0 overflow-hidden">
-                  <div className="p-4 border-b border-zinc-800 bg-zinc-900/60"><h3 className="text-sm font-semibold text-zinc-300 flex items-center gap-2">Download Completion Rate</h3></div>
-                  <table className="w-full text-sm text-left"><thead className="bg-zinc-800/30 text-zinc-500 text-xs"><tr><th className="px-4 py-2">Bible</th><th className="px-4 py-2">Started</th><th className="px-4 py-2">Completed</th><th className="px-4 py-2 text-right">Rate %</th></tr></thead><tbody className="divide-y divide-zinc-800/50"><tr><td className="px-4 py-3 text-zinc-300 font-medium">TB</td><td className="px-4 py-3 text-zinc-400">12,000</td><td className="px-4 py-3 text-zinc-400">11,800</td><td className="px-4 py-3 text-right text-emerald-400">98.3%</td></tr><tr><td className="px-4 py-3 text-zinc-300 font-medium">KJV</td><td className="px-4 py-3 text-zinc-400">4,500</td><td className="px-4 py-3 text-zinc-400">3,100</td><td className="px-4 py-3 text-right text-amber-400">68.8%</td></tr></tbody></table>
-                </div>
-              </div>
-            )}
-          </div>
-        )}
-
-        {/* SETTINGS */}
-        {activeTab === 'settings' && (
-          <div className="space-y-6 max-w-xl animate-in fade-in duration-500">
-            <header className="mb-6">
-              <h2 className="text-2xl font-bold text-zinc-100 tracking-tight">System Configuration</h2>
-              <p className="text-sm text-zinc-500 mt-1">Tokens and keys are strictly saved in local browser storage.</p>
-            </header>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-              <h3 className="text-sm font-semibold text-zinc-300 mb-5 border-b border-zinc-800 pb-2">GitHub App Context</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-1 block">Repo Target (owner/repo)</label>
-                  <input type="text" value={ghRepo} onChange={(e) => setGhRepo(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-500 rounded-lg px-4 py-2.5 text-sm text-zinc-200 outline-none transition-colors" />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-1 block">PAT Token (Actions Scope)</label>
-                  <input type="password" value={ghToken} onChange={(e) => setGhToken(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-500 rounded-lg px-4 py-2.5 text-sm text-zinc-200 outline-none transition-colors" />
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-zinc-900 border border-zinc-800 rounded-2xl p-6">
-              <h3 className="text-sm font-semibold text-zinc-300 mb-5 border-b border-zinc-800 pb-2">Worker API Context</h3>
-              <div className="space-y-4">
-                <div>
-                  <label className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-1 block">Public URL</label>
-                  <input type="text" value={workerUrl} onChange={(e) => setWorkerUrl(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-500 rounded-lg px-4 py-2.5 text-sm text-zinc-200 outline-none transition-colors" />
-                </div>
-                <div>
-                  <label className="text-[11px] font-bold tracking-widest uppercase text-zinc-500 mb-1 block">X-App-Key</label>
-                  <input type="password" value={workerAppKey} onChange={(e) => setWorkerAppKey(e.target.value)} className="w-full bg-zinc-950 border border-zinc-800 focus:border-zinc-500 rounded-lg px-4 py-2.5 text-sm text-zinc-200 outline-none transition-colors" />
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-      </main>
-    </div>
-  )
-}
-
-function SidebarItem(id: string, label: string, Icon: any, activeId: string, setActive: any, onClick?: () => void) {
-  const active = id === activeId
-  return (
-    <button onClick={() => { setActive(id); onClick && onClick() }} className={`flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all duration-200 w-full text-left ${active ? 'bg-zinc-800 text-zinc-100' : 'text-zinc-500 hover:text-zinc-300 hover:bg-zinc-800/50'}`}>
-      <Icon className={`w-4 h-4 ${active ? 'text-zinc-100' : ''}`} />
-      {label}
-    </button>
-  )
-}
-
-function AnalyticsTab({ title, active, onClick }: { title: string, active: boolean, onClick: () => void }) {
-  return (
-    <button onClick={onClick} className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${active ? 'border-emerald-500 text-zinc-100' : 'border-transparent text-zinc-500 hover:text-zinc-300'}`}>
-      {title}
-    </button>
-  )
-}
-
-function MetricCard({ title, value, color, icon: Icon, desc }: any) {
-  const c = { emerald: 'text-emerald-500', amber: 'text-amber-500', red: 'text-red-500' }[color as string] || 'text-zinc-300'
-  return (
-    <div className="bg-zinc-900 border border-zinc-800 p-5 rounded-2xl flex flex-col justify-between min-h-[120px]">
-      <div className="flex justify-between items-start">
-        <span className="text-xs font-semibold text-zinc-500 uppercase tracking-widest">{title}</span>
-        {Icon && <Icon className={`w-4 h-4 ${c}`} />}
-      </div>
-      <div>
-        <div className={`text-3xl font-bold tracking-tight ${c}`}>{value}</div>
-        {desc && <p className="text-xs text-zinc-500 mt-1">{desc}</p>}
-      </div>
-    </div>
-  )
-}
-
-function ScraperTableRow({ title, tag, isPrimary, triggerFn, target }: any) {
-  const [status, setStatus] = useState('idle')
-
-  return (
-    <tr className="hover:bg-zinc-800/30 transition-colors">
-      <td className="px-6 py-4">
-        <div className="font-medium text-zinc-200">{title}</div>
-        <div className="text-xs text-zinc-500 mt-0.5">{tag}</div>
-      </td>
-      <td className="px-6 py-4 text-sm">
-        {status === 'idle' && <span className="text-zinc-500">—</span>}
-        {status === 'running' && <span className="text-amber-500 flex items-center gap-2"><Loader2 className="w-3.5 h-3.5 animate-spin" /> Running</span>}
-        {status === 'success' && <span className="text-emerald-500 flex items-center gap-1.5"><CheckCircle2 className="w-3.5 h-3.5" /> Success</span>}
-        {status === 'error' && <span className="text-red-500 flex items-center gap-1.5"><XCircle className="w-3.5 h-3.5" /> Failed</span>}
-      </td>
-      <td className="px-6 py-4 text-xs text-zinc-500">
-        {status === 'idle' ? 'Yesterday' : status === 'running' ? 'Right now' : 'Just now'}
-      </td>
-      <td className="px-6 py-4 text-right">
-        <button onClick={() => triggerFn(target, setStatus)} disabled={status === 'running'} className={`px-4 py-2 rounded-lg text-xs font-semibold tracking-wide transition-colors ${isPrimary ? 'bg-zinc-100 text-zinc-900 hover:bg-white' : 'bg-zinc-800 text-zinc-300 hover:bg-zinc-700 disabled:opacity-50'}`}>
-           RUN
-        </button>
-      </td>
-    </tr>
-  )
-}
