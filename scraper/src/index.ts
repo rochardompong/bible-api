@@ -6,13 +6,13 @@ dotenv.config()
 
 const YOUVERSION_BASE = 'https://api.youversion.com/v1'
 const API_KEY = process.env.YOUVERSION_API_KEY
-const R2_BUCKET = process.env.R2_BUCKET_NAME || 'hybrid-bible-cache'
+const R2_BUCKET = process.env.R2_BUCKET_NAME
 const PRIORITY_LANGUAGES = process.env.PRIORITY_LANGUAGES ? process.env.PRIORITY_LANGUAGES.split(',') : ['ENG', 'IND']
 const TARGET = process.env.SCRAPE_TARGET || 'all'
 
 const s3Client = new S3Client({
   region: 'auto',
-  endpoint: process.env.R2_ENDPOINT, // e.g., https://<account_id>.r2.cloudflarestorage.com
+  endpoint: process.env.R2_ENDPOINT,
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
     secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || '',
@@ -26,10 +26,7 @@ async function fetchFromYV(endpoint: string) {
     const res = await axios.get(url, {
       headers: {
         'Accept': 'application/json',
-        'X-YouVersion-Client': 'youversion',
-        'X-YouVersion-App-Platform': 'web',
-        'X-YouVersion-App-Version': '1',
-        'Authorization': `Bearer ${API_KEY}`
+        'X-YVP-App-Key': API_KEY
       }
     })
     return res.data
@@ -74,21 +71,21 @@ async function scrapeBibles() {
   const data = await fetchFromYV('/bibles')
   if (data) {
     await saveToR2('bibles/index.json', data)
-    
+
     // Filter to priority languages (limit to max 3 per language PRD)
     const allBibles = data.data || []
     let targeted: any[] = []
-    
+
     for (const lang of PRIORITY_LANGUAGES) {
       const biblesForLang = allBibles.filter((b: any) => b.language?.tag?.toUpperCase() === lang.toUpperCase())
       targeted = targeted.concat(biblesForLang.slice(0, 3)) // max 3 per lang
     }
-    
+
     // Save individually
     for (const bible of targeted) {
       await saveToR2(`bibles/${bible.id}.json`, { data: bible })
     }
-    
+
     return targeted
   }
   return []
@@ -96,7 +93,7 @@ async function scrapeBibles() {
 
 async function runScrape() {
   console.log(`Starting Phase 1 Scrape. Target: ${TARGET}`)
-  
+
   if (!API_KEY) {
     console.error("FATAL: YOUVERSION_API_KEY is missing")
     process.exit(1)
@@ -120,18 +117,18 @@ async function runScrape() {
       console.log('Fetching bibles required for books/chapters execution fallback...')
       bibles = await scrapeBibles()
     }
-    
+
     for (const b of bibles) {
       const bibleId = b.id
       if (process.env.TARGET_BIBLE_ID && process.env.TARGET_BIBLE_ID !== String(bibleId)) {
         continue // Skip if not the targeted bible
       }
-      
+
       console.log(`-- Fetching Books for Bible ${bibleId} --`)
       const booksData = await fetchFromYV(`/bibles/${bibleId}/books`)
       if (booksData) {
         await saveToR2(`bibles/${bibleId}/books.json`, booksData)
-        
+
         // Custom Index building
         const customIndex: any = { bible_id: bibleId, books: [] }
 
@@ -142,7 +139,7 @@ async function runScrape() {
             const chaptersData = await fetchFromYV(`/bibles/${bibleId}/books/${bookId}/chapters`)
             if (chaptersData) {
               await saveToR2(`bibles/${bibleId}/books/${bookId}/chapters.json`, chaptersData)
-              
+
               customIndex.books.push({
                 book_id: bookId,
                 name: book.name,
@@ -151,7 +148,7 @@ async function runScrape() {
             }
           }
         }
-        
+
         // Save the custom generated index
         if (customIndex.books.length > 0) {
           await saveToR2(`bibles/${bibleId}/index.json`, { data: customIndex })
@@ -165,17 +162,17 @@ async function runScrape() {
     const today = new Date()
     const year = today.getFullYear()
     const day = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24)
-    
+
     // Scrape today + 3 days buffer
-    for(let offset = 0; offset <= 3; offset++) {
+    for (let offset = 0; offset <= 3; offset++) {
       const targetDay = day + offset
-      const votdData = await fetchFromYV(`/verse_of_the_day/${targetDay}?year=${year}`)
+      const votdData = await fetchFromYV(`/verse_of_the_days/${targetDay}?year=${year}`)
       if (votdData) {
         await saveToR2(`verse_of_the_day/${year}/${targetDay}.json`, votdData)
       }
       // Also save yearly if it's offset 0 
       if (offset === 0 && votdData) {
-         await saveToR2(`verse_of_the_day/${year}.json`, votdData)
+        await saveToR2(`verse_of_the_day/${year}.json`, votdData)
       }
     }
   }

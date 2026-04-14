@@ -220,7 +220,7 @@ app.get('/bibles/:bible_id/chapters/:chapter_id/verses', (c) => {
                 const fetchRes = await fetch(`${YOUVERSION_BASE}/bibles/${bible_id}/chapters/${nextChapterId}/verses`, {
                   headers: {
                     'Accept': 'application/json',
-                    'Authorization': `Bearer ${c.env.YOUVERSION_API_KEY}`
+                    'X-YVP-App-Key': c.env.YOUVERSION_API_KEY
                   }
                 })
                 if (fetchRes.ok) {
@@ -279,12 +279,12 @@ app.get('/bibles/:bible_id/passages/:passage_id', (c) => {
 
 app.get('/verse_of_the_day/:year', (c) => {
   const { year } = c.req.param()
-  return fetchWithFallback(c, `verse_of_the_day/${year}.json`, `/verse_of_the_day?year=${year}`)
+  return fetchWithFallback(c, `verse_of_the_day/${year}.json`, `/verse_of_the_days?year=${year}`)
 })
 
 app.get('/verse_of_the_day/:year/:day', (c) => {
   const { year, day } = c.req.param()
-  return fetchWithFallback(c, `verse_of_the_day/${year}/${day}.json`, `/verse_of_the_day/${day}?year=${year}`)
+  return fetchWithFallback(c, `verse_of_the_day/${year}/${day}.json`, `/verse_of_the_days/${day}?year=${year}`)
 })
 
 app.onError((err, c) => {

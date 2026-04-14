@@ -1,7 +1,7 @@
 import { Context } from 'hono'
 import { Env } from './index'
 
-export const YOUVERSION_BASE = 'https://yv-api.youversionapi.com/3'
+export const YOUVERSION_BASE = 'https://api.youversion.com/v1'
 
 export async function fetchWithFallback(
   c: Context<{ Bindings: Env }>,
@@ -55,10 +55,7 @@ export async function fetchWithFallback(
     const response = await fetch(fallbackUrl, {
       headers: {
         'Accept': 'application/json',
-        'X-YouVersion-Client': 'youversion',
-        'X-YouVersion-App-Platform': 'web',
-        'X-YouVersion-App-Version': '1',
-        'Authorization': `Bearer ${apiKey}`
+        'X-YVP-App-Key': apiKey
       }
     })
 
