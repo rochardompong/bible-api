@@ -1,0 +1,69 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 210 20% 98%; /* #f7f9fb */
+    --foreground: 200 9% 11%; /* #191c1e */
+
+    --card: 0 0% 100%;
+    --card-foreground: 200 9% 11%;
+
+    --popover: 0 0% 100%;
+    --popover-foreground: 200 9% 11%;
+
+    --primary: 0 0% 0%; /* #000000 */
+    --primary-foreground: 0 0% 100%; /* #ffffff */
+
+    --secondary: 216 80% 90%; /* #d0e1fb */
+    --secondary-foreground: 215 18% 40%; /* #54647a */
+
+    --muted: 210 20% 96%; /* #f2f4f6 */
+    --muted-foreground: 215 14% 34%; 
+
+    --accent: 210 20% 90%; /* #e6e8ea */
+    --accent-foreground: 200 9% 11%;
+
+    --destructive: 0 74% 42%;
+    --destructive-foreground: 0 0% 100%;
+
+    --border: 240 6% 79%; /* c6c6cd outline-variant updated */
+    --input: 240 6% 79%;
+    --ring: 0 0% 0%;
+
+    --radius: 0.25rem;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-on-surface font-sans antialiased;
+  }
+  h1, h2, h3, h4, h5, h6 {
+    @apply tracking-tight;
+  }
+}
+
+@layer utilities {
+  .text-display-lg {
+    @apply text-5xl font-semibold tracking-[-0.04em];
+  }
+  .text-display-md {
+    @apply text-4xl font-semibold tracking-[-0.04em];
+  }
+  .text-display-sm {
+    @apply text-3xl font-semibold tracking-[-0.04em];
+  }
+  .glass-panel {
+    @apply bg-surface-container-lowest/85 backdrop-blur-[12px];
+  }
+  .btn-kinetic {
+    @apply rounded-xl transition-all duration-200 hover:shadow-ambient hover:bg-primary-container;
+  }
+}

@@ -1,0 +1,16 @@
+{
+  "name": "hybrid-bible-api",
+  "version": "1.0.0",
+  "private": true,
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "packageManager": "pnpm@9.0.0",
+  "scripts": {
+    "dev:worker": "pnpm --filter worker run dev",
+    "dev:dashboard": "pnpm --filter dashboard run dev",
+    "dev:scraper": "pnpm --filter scraper run dev",
+    "build:worker": "pnpm --filter worker run build",
+    "build:dashboard": "pnpm --filter dashboard run build"
+  }
+}

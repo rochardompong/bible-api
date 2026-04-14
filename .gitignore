@@ -1,0 +1,12 @@
+node_modules/
+dist/
+.env
+
+# Cloudflare Wrangler cache
+.wrangler/
+
+# MacOS
+.DS_Store
+
+# Git
+.git/
