@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react'
 import { 
-  Activity, Settings, Server, RefreshCw, CheckCircle2, Database, Trash2, Search, 
+  Activity, Settings, Server, RefreshCw, Database, Trash2, Search, 
   FileJson, BarChart3, ShieldCheck, Loader2, 
   Globe, Zap, ChevronRight, Lock, Code, LogOut, Layers, History, Cpu
 } from 'lucide-react'
