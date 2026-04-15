@@ -18,7 +18,11 @@ const app = new Hono<{ Bindings: Env }>()
 // MIDDLEWARES
 // ==========================================
 
-app.use('*', cors())
+app.use('*', cors({
+  origin: '*',
+  allowHeaders: ['Content-Type', 'X-App-Key', 'Authorization'],
+  allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+}))
 
 // 1. X-App-Key Protection
 app.use('*', async (c, next) => {
