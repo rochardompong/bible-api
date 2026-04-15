@@ -6,7 +6,8 @@ import {
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
-// --- Mock Data ---
+// --- Constants ---
+const MASTER_WORKER_URL = 'https://bible-api.rochardompong.workers.dev';
 const volumeData = [
   { name: 'Mon', reqs: 4000 }, { name: 'Tue', reqs: 3000 }, { name: 'Wed', reqs: 5000 },
   { name: 'Thu', reqs: 7000 }, { name: 'Fri', reqs: 6000 }, { name: 'Sat', reqs: 9000 }, { name: 'Sun', reqs: 11000 }
@@ -211,8 +212,6 @@ function DocEntry({ method, path, desc }: any) {
 function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
-  const [showConfig, setShowConfig] = useState(false)
-  const [tempWorkerUrl, setTempWorkerUrl] = useState(localStorage.getItem('workerUrl') || 'https://bible-api.rochardompong.workers.dev')
 
   const handleLogin = async (e: any) => {
     e.preventDefault();
@@ -220,11 +219,8 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
     setError('');
     const key = e.target.appkey.value;
     
-    // Save current worker URL before probing
-    localStorage.setItem('workerUrl', tempWorkerUrl);
-
     try {
-      const res = await fetch(`${tempWorkerUrl}/admin/r2/list?prefix=ping`, {
+      const res = await fetch(`${MASTER_WORKER_URL}/admin/r2/list?prefix=ping`, {
         headers: { 'X-App-Key': key }
       });
       
@@ -232,7 +228,7 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
         throw new Error('Invalid Identity Key. Access Denied.');
       }
       if (!res.ok) {
-        throw new Error('Connection failed. Verify Worker URL.');
+        throw new Error('System link failed. Verify Worker status.');
       }
 
       onLogin(key);
@@ -251,7 +247,7 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
            <ShieldCheck className="w-8 h-8 text-emerald-500" />
         </div>
         <h2 className="text-3xl font-black text-white tracking-tight mb-3">Admin Vault</h2>
-        <p className="text-zinc-500 text-sm font-medium mb-8">Verification required. Select your endpoint and provide identity key.</p>
+        <p className="text-zinc-500 text-sm font-medium mb-8">Verification required. Provide your Kinetic Identity Key to access the core console.</p>
         
         <form onSubmit={handleLogin} className="space-y-6">
           <div className="space-y-4">
@@ -262,20 +258,6 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
                 className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-2xl px-5 py-4 text-sm text-zinc-100 outline-none transition-all placeholder:text-zinc-700"
               />
             </div>
-
-            {showConfig ? (
-              <div className="animate-in slide-in-from-top-2 duration-300">
-                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-2 block ml-1">Worker Endpoint URL</label>
-                <input 
-                  type="url" value={tempWorkerUrl} onChange={(e) => setTempWorkerUrl(e.target.value)}
-                  className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-2xl px-5 py-4 text-xs text-zinc-400 outline-none transition-all"
-                />
-              </div>
-            ) : (
-              <button type="button" onClick={() => setShowConfig(true)} className="text-[10px] text-zinc-600 hover:text-emerald-500 font-bold uppercase tracking-tighter ml-1 transition-colors">
-                Configure Worker URL →
-              </button>
-            )}
 
             {error && <div className="text-red-400 text-xs font-bold bg-red-500/10 p-4 rounded-xl border border-red-500/20 animate-shake">{error}</div>}
             
@@ -296,7 +278,6 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   const [activeTab, setActiveTab] = useState('overview')
   const [ghRepo, setGhRepo] = useState(localStorage.getItem('ghRepo') || 'owner/repo')
   const [ghToken, setGhToken] = useState(localStorage.getItem('ghToken') || '')
-  const [workerUrl, setWorkerUrl] = useState(localStorage.getItem('workerUrl') || 'https://bible-api.rochardompong.workers.dev')
   
   const [r2Files, setR2Files] = useState<any[]>([])
   const [r2Prefix, setR2Prefix] = useState('')
@@ -308,12 +289,11 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   useEffect(() => {
     localStorage.setItem('ghRepo', ghRepo)
     localStorage.setItem('ghToken', ghToken)
-    localStorage.setItem('workerUrl', workerUrl)
-  }, [ghRepo, ghToken, workerUrl])
+  }, [ghRepo, ghToken])
 
   const fetchR2Files = async () => {
     try {
-      const res = await fetch(`${workerUrl}/admin/r2/list?prefix=${r2Prefix}`, {
+      const res = await fetch(`${MASTER_WORKER_URL}/admin/r2/list?prefix=${r2Prefix}`, {
         headers: { 'X-App-Key': workerAppKey }
       })
       const data = await res.json()
@@ -322,7 +302,7 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   }
   const previewR2File = async (key: string) => {
     try {
-      const res = await fetch(`${workerUrl}/admin/r2/preview?key=${encodeURIComponent(key)}`, {
+      const res = await fetch(`${MASTER_WORKER_URL}/admin/r2/preview?key=${encodeURIComponent(key)}`, {
         headers: { 'X-App-Key': workerAppKey }
       })
       const data = await res.json()
@@ -333,7 +313,7 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   const deleteR2File = async (key: string) => {
     if (!confirm(`Hapus cache ${key}?`)) return
     try {
-      await fetch(`${workerUrl}/admin/r2/delete?key=${encodeURIComponent(key)}`, {
+      await fetch(`${MASTER_WORKER_URL}/admin/r2/delete?key=${encodeURIComponent(key)}`, {
         method: 'DELETE',
         headers: { 'X-App-Key': workerAppKey }
       })
@@ -344,7 +324,7 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   const fetchAnalytics = async (type: string) => {
     setIsAnalyticsLoading(true)
     try {
-      const res = await fetch(`${workerUrl}/admin/analytics?type=${type}`, {
+      const res = await fetch(`${MASTER_WORKER_URL}/admin/analytics?type=${type}`, {
         headers: { 'X-App-Key': workerAppKey }
       })
       const resp = await res.json()
@@ -621,18 +601,6 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
                 <div className="space-y-4 pt-4">
                   <InputBox label="Repository Target" value={ghRepo} onChange={setGhRepo} />
                   <InputBox label="Private Access Token" value={ghToken} onChange={setGhToken} isPass />
-                </div>
-              </ConfigCard>
-              <ConfigCard icon={Server} title="Worker API Gateway" desc="Configure remote worker endpoint.">
-                <div className="space-y-4 pt-4">
-                  <InputBox label="Worker HTTPS URL" value={workerUrl} onChange={setWorkerUrl} />
-                  <div>
-                    <label className="text-[10px] font-black uppercase text-zinc-500 mb-2 block tracking-widest">Active X-App-Key</label>
-                    <div className="w-full bg-zinc-950 border border-emerald-950 px-5 py-4 rounded-2xl text-emerald-500 text-sm font-mono flex items-center justify-between">
-                      <span>HIDDEN_SIGNATURE_NODE</span>
-                      <CheckCircle2 className="w-4 h-4" />
-                    </div>
-                  </div>
                 </div>
               </ConfigCard>
             </div>
