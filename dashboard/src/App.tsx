@@ -280,6 +280,8 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
   const [r2Prefix, setR2Prefix] = useState('')
   const [previewData, setPreviewData] = useState<any>(null)
   const [analyticsTab, setAnalyticsTab] = useState('usage')
+  const [analyticsData, setAnalyticsData] = useState<any[]>([])
+  const [isAnalitycsLoading, setIsAnalyticsLoading] = useState(false)
 
   useEffect(() => {
     localStorage.setItem('ghRepo', ghRepo)
@@ -316,6 +318,31 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
       fetchR2Files()
     } catch (err: any) { alert(err.message) }
   }
+
+  const fetchAnalytics = async (type: string) => {
+    setIsAnalyticsLoading(true)
+    try {
+      const res = await fetch(`${workerUrl}/admin/analytics?type=${type}`, {
+        headers: { 'X-App-Key': workerAppKey }
+      })
+      const resp = await res.json()
+      // Extracting series from GraphQL nested structure:
+      // data.viewer.accounts[0].series
+      const rawSeries = resp.data?.viewer?.accounts[0]?.series || []
+      const formatted = rawSeries.map((s: any) => ({
+        name: new Date(s.dimensions.datetime).toLocaleDateString(),
+        value: s.sum.doubles
+      }))
+      setAnalyticsData(formatted)
+    } catch (err: any) { console.error('Analytics Error:', err) }
+    setIsAnalyticsLoading(false)
+  }
+
+  useEffect(() => {
+    if (activeTab === 'analytics') {
+      fetchAnalytics(analyticsTab)
+    }
+  }, [activeTab, analyticsTab])
 
   const triggerAction = async (target: string, setStatus: any) => {
     if (!ghToken) return alert("GitHub Token required.")
@@ -521,15 +548,43 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
                <TabBtn label="Search Intent" active={analyticsTab === 'search'} set={() => setAnalyticsTab('search')} />
                <TabBtn label="App Syncs" active={analyticsTab === 'download'} set={() => setAnalyticsTab('download')} />
             </div>
-            <div className="bg-zinc-900/20 border border-zinc-900 p-12 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 min-h-[400px]">
-               <div className="w-16 h-16 rounded-3xl bg-emerald-500/5 border border-emerald-500/20 flex items-center justify-center">
-                  <Loader2 className="w-8 h-8 text-emerald-500/40 animate-spin" />
-               </div>
-               <div className="text-center space-y-2">
-                 <h3 className="text-lg font-bold text-white">Phase 3 Integration</h3>
-                 <p className="text-sm text-zinc-500 max-w-sm">Live GraphQL connection to Cloudflare Analytics Engine is currently being provisioned.</p>
-               </div>
-            </div>
+
+            {isAnalitycsLoading ? (
+              <div className="h-64 flex items-center justify-center">
+                <Loader2 className="w-8 h-8 text-emerald-500 animate-spin" />
+              </div>
+            ) : (
+              <div className="space-y-12 animate-in fade-in duration-500">
+                {analyticsTab === 'usage' && (
+                  <div className="bg-zinc-900/30 border border-zinc-900 rounded-[2rem] p-8">
+                    <h3 className="text-sm font-bold text-zinc-100 mb-8 uppercase tracking-widest">Live Request Volume (Last 7 Days)</h3>
+                    <div className="h-96">
+                      <ResponsiveContainer width="100%" height="100%">
+                        <LineChart data={analyticsData.length > 0 ? analyticsData : volumeData}>
+                          <CartesianGrid strokeDasharray="3 3" stroke="#18181b" vertical={false} />
+                          <XAxis dataKey="name" stroke="#52525b" fontSize={10} axisLine={false} tickLine={false} />
+                          <YAxis stroke="#52525b" fontSize={10} axisLine={false} tickLine={false} />
+                          <Tooltip contentStyle={{ backgroundColor: '#09090b', border: '1px solid #18181b', borderRadius: '12px' }} />
+                          <Line type="monotone" dataKey="value" stroke="#10b981" strokeWidth={4} dot={{ r: 4, fill: '#10b981' }} activeDot={{ r: 6 }} />
+                        </LineChart>
+                      </ResponsiveContainer>
+                    </div>
+                  </div>
+                )}
+                
+                {analyticsTab !== 'usage' && (
+                  <div className="bg-zinc-900/20 border border-zinc-900 p-12 rounded-[2.5rem] flex flex-col items-center justify-center gap-6 min-h-[400px]">
+                    <div className="w-16 h-16 rounded-3xl bg-amber-500/5 border border-amber-500/20 flex items-center justify-center">
+                        <BarChart3 className="w-8 h-8 text-amber-500/40" />
+                    </div>
+                    <div className="text-center space-y-2">
+                      <h3 className="text-lg font-bold text-white">Advanced Tab Provisioning</h3>
+                      <p className="text-sm text-zinc-500 max-w-sm">Search and Download analytics require Mobile App instrumentation to populate CAE datasets.</p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         )}
 

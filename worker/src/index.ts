@@ -8,6 +8,8 @@ export type Env = {
   ANALYTICS: AnalyticsEngineDataset
   APP_KEY: string
   YOUVERSION_API_KEY: string
+  CF_ACCOUNT_ID: string
+  CF_API_TOKEN: string
 }
 
 const app = new Hono<{ Bindings: Env }>()
@@ -132,6 +134,60 @@ app.post('/analytics/track', async (c) => {
     return c.json({ success: true })
   } catch (err: any) {
     return createErrorResponse(c, 400, 'BAD_REQUEST', 'Invalid telemetry payload')
+  }
+})
+
+// Query Analytics Engine via GraphQL
+app.get('/admin/analytics', async (c) => {
+  const accountId = c.env.CF_ACCOUNT_ID
+  const apiToken = c.env.CF_API_TOKEN
+  const type = c.req.query('type') || 'usage' 
+
+  if (!accountId || !apiToken) {
+    return createErrorResponse(c, 500, 'CONFIG_ERROR', 'Cloudflare Analytics credentials not configured.')
+  }
+
+  const now = new Date();
+  const sevenDaysAgo = new Date(now.getTime() - (7 * 24 * 60 * 60 * 1000)).toISOString();
+
+  const queries: Record<string, string> = {
+    usage: `
+      query {
+        viewer {
+          accounts(filter: {accountTag: "${accountId}"}) {
+            series: analyticsEngineDatasetAdaptiveGroups(
+              limit: 100,
+              filter: {
+                dataset: "ANALYTICS",
+                timestamp_gt: "${sevenDaysAgo}"
+              },
+              orderBy: [timestamp_DAY]
+            ) {
+              dimensions { datetime: timestamp_DAY }
+              sum { doubles: double1 }
+            }
+          }
+        }
+      }
+    `
+  };
+
+  const query = queries[type] || queries.usage;
+
+  try {
+    const res = await fetch(`https://api.cloudflare.com/client/v4/graphql`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${apiToken}`
+      },
+      body: JSON.stringify({ query })
+    });
+
+    const result: any = await res.json();
+    return c.json({ data: result.data || result.errors });
+  } catch (err: any) {
+    return createErrorResponse(c, 502, 'GATEWAY_ERROR', 'Failed to fetch from Analytics Engine API')
   }
 })
 
