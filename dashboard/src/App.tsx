@@ -48,7 +48,7 @@ export default function App() {
       {/* Route: Login */}
       {route === 'login' && (
         <LoginPage 
-          onLogin={(key: string) => {
+          onLogin={async (key: string) => {
             setWorkerAppKey(key);
             localStorage.setItem('workerAppKey', key);
             window.location.hash = '#admin';
@@ -208,7 +208,38 @@ function DocEntry({ method, path, desc }: any) {
   )
 }
 
-function LoginPage({ onLogin }: { onLogin: (key: string) => void }) {
+function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState('')
+
+  const handleLogin = async (e: any) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+    const key = e.target.appkey.value;
+    const workerUrl = localStorage.getItem('workerUrl') || 'https://bible-api.rochardompong.workers.dev';
+
+    try {
+      // Probing the worker to verify the key
+      const res = await fetch(`${workerUrl}/admin/r2/list?prefix=ping`, {
+        headers: { 'X-App-Key': key }
+      });
+      
+      if (res.status === 401) {
+        throw new Error('Invalid Identity Key. Access Denied.');
+      }
+      if (!res.ok) {
+        throw new Error('Could not connect to Worker. Check URL in Settings.');
+      }
+
+      onLogin(key);
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <main className="min-h-screen flex items-center justify-center p-6 bg-zinc-950 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_center,_var(--tw-gradient-stops))] from-zinc-900/50 via-zinc-950 to-zinc-950 -z-10" />
@@ -219,17 +250,15 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => void }) {
         <h2 className="text-3xl font-black text-white tracking-tight mb-3">Admin Vault</h2>
         <p className="text-zinc-500 text-sm font-medium mb-8">Verification required. Provide your Kinetic Identity Key to access the core console.</p>
         
-        <form onSubmit={(e: any) => {
-          e.preventDefault();
-          onLogin(e.target.appkey.value);
-        }}>
+        <form onSubmit={handleLogin}>
           <div className="space-y-5">
             <input 
               name="appkey" type="password" required placeholder="Identity Key..." 
               className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-2xl px-5 py-4 text-sm text-zinc-100 outline-none transition-all placeholder:text-zinc-700"
             />
-            <button type="submit" className="w-full bg-zinc-100 hover:bg-white text-zinc-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-white/5 active:scale-95">
-              Unlock Console
+            {error && <div className="text-red-400 text-xs font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20 animate-shake">{error}</div>}
+            <button type="submit" disabled={loading} className="w-full bg-zinc-100 hover:bg-white disabled:opacity-50 text-zinc-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-white/5 active:scale-95 flex items-center justify-center gap-2">
+              {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Unlock Console'}
             </button>
             <a href="#landing" className="block text-center text-xs text-zinc-600 hover:text-zinc-400 transition-colors uppercase font-bold tracking-widest">Return to Home</a>
           </div>
@@ -349,7 +378,10 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
             </div>
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
               <div className="lg:col-span-2 bg-zinc-900/30 border border-zinc-900 rounded-[2rem] p-8">
-                <h3 className="text-sm font-bold text-zinc-100 mb-8 uppercase tracking-widest">Traffic Matrix</h3>
+                <div className="flex justify-between items-start mb-8">
+                  <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-widest">Traffic Matrix</h3>
+                  <span className="text-[9px] font-black bg-zinc-800 text-zinc-500 px-2 py-1 rounded border border-zinc-700 uppercase">Simulated</span>
+                </div>
                 <div className="h-64">
                   <ResponsiveContainer width="100%" height="100%">
                     <LineChart data={volumeData}>
@@ -363,7 +395,10 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
                 </div>
               </div>
               <div className="bg-zinc-900/30 border border-zinc-900 rounded-[2rem] p-8">
-                <h3 className="text-sm font-bold text-zinc-100 mb-8 uppercase tracking-widest">Bible Load</h3>
+                <div className="flex justify-between items-start mb-8">
+                  <h3 className="text-sm font-bold text-zinc-100 uppercase tracking-widest">Bible Load</h3>
+                  <span className="text-[9px] font-black bg-zinc-800 text-zinc-500 px-2 py-1 rounded border border-zinc-700 uppercase">Simulated</span>
+                </div>
                 <div className="h-64">
                    <ResponsiveContainer width="100%" height="100%">
                     <BarChart data={topBibles} layout="vertical">
