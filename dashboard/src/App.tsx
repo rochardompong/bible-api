@@ -1,8 +1,8 @@
 import { useState, useEffect } from 'react'
 import { 
   Activity, Settings, Server, RefreshCw, CheckCircle2, Database, Trash2, Search, 
-  FileJson, BarChart3, LineChart as LineChartIcon, ShieldCheck, XCircle, Loader2, 
-  Globe, Zap, ChevronRight, Lock, Code, LogOut, BookOpen, Layers, History, Cpu
+  FileJson, BarChart3, ShieldCheck, Loader2, 
+  Globe, Zap, ChevronRight, Lock, Code, LogOut, Layers, History, Cpu
 } from 'lucide-react'
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar } from 'recharts'
 
@@ -267,6 +267,26 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
       setR2Files(data.data || [])
     } catch (err: any) { alert(err.message) }
   }
+  const previewR2File = async (key: string) => {
+    try {
+      const res = await fetch(`${workerUrl}/admin/r2/preview?key=${encodeURIComponent(key)}`, {
+        headers: { 'X-App-Key': workerAppKey }
+      })
+      const data = await res.json()
+      setPreviewData(JSON.stringify(data, null, 2))
+    } catch (err: any) { alert(err.message) }
+  }
+
+  const deleteR2File = async (key: string) => {
+    if (!confirm(`Hapus cache ${key}?`)) return
+    try {
+      await fetch(`${workerUrl}/admin/r2/delete?key=${encodeURIComponent(key)}`, {
+        method: 'DELETE',
+        headers: { 'X-App-Key': workerAppKey }
+      })
+      fetchR2Files()
+    } catch (err: any) { alert(err.message) }
+  }
 
   const triggerAction = async (target: string, setStatus: any) => {
     if (!ghToken) return alert("GitHub Token required.")
@@ -423,11 +443,11 @@ function AdminDashboard({ workerAppKey, onLogout }: any) {
                        <tbody className="divide-y divide-zinc-900">
                         {r2Files.map(f => (
                           <tr key={f.key} className="hover:bg-zinc-900/50 group transition-colors">
-                            <td className="px-6 py-4 font-mono text-zinc-400 truncate max-w-[200px]">{f.key}</td>
+                            <td className="px-6 py-4 font-mono text-zinc-400 truncate max-w-[200px] cursor-pointer hover:text-emerald-400 transition-colors" onClick={() => previewR2File(f.key)}>{f.key}</td>
                             <td className="px-6 py-4 text-right">
                               <div className="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                                <button className="p-2 bg-zinc-900 rounded-lg hover:text-emerald-500 transition-colors"><FileJson className="w-3.5 h-3.5" /></button>
-                                <button className="p-2 bg-zinc-900 rounded-lg hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => previewR2File(f.key)} className="p-2 bg-zinc-900 rounded-lg hover:text-emerald-500 transition-colors"><FileJson className="w-3.5 h-3.5" /></button>
+                                <button onClick={() => deleteR2File(f.key)} className="p-2 bg-zinc-900 rounded-lg hover:text-red-500 transition-colors"><Trash2 className="w-3.5 h-3.5" /></button>
                               </div>
                             </td>
                           </tr>
