@@ -211,17 +211,20 @@ function DocEntry({ method, path, desc }: any) {
 function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState('')
+  const [showConfig, setShowConfig] = useState(false)
+  const [tempWorkerUrl, setTempWorkerUrl] = useState(localStorage.getItem('workerUrl') || 'https://bible-api.rochardompong.workers.dev')
 
   const handleLogin = async (e: any) => {
     e.preventDefault();
     setLoading(true);
     setError('');
     const key = e.target.appkey.value;
-    const workerUrl = localStorage.getItem('workerUrl') || 'https://bible-api.rochardompong.workers.dev';
+    
+    // Save current worker URL before probing
+    localStorage.setItem('workerUrl', tempWorkerUrl);
 
     try {
-      // Probing the worker to verify the key
-      const res = await fetch(`${workerUrl}/admin/r2/list?prefix=ping`, {
+      const res = await fetch(`${tempWorkerUrl}/admin/r2/list?prefix=ping`, {
         headers: { 'X-App-Key': key }
       });
       
@@ -229,7 +232,7 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
         throw new Error('Invalid Identity Key. Access Denied.');
       }
       if (!res.ok) {
-        throw new Error('Could not connect to Worker. Check URL in Settings.');
+        throw new Error('Connection failed. Verify Worker URL.');
       }
 
       onLogin(key);
@@ -248,19 +251,38 @@ function LoginPage({ onLogin }: { onLogin: (key: string) => Promise<void> }) {
            <ShieldCheck className="w-8 h-8 text-emerald-500" />
         </div>
         <h2 className="text-3xl font-black text-white tracking-tight mb-3">Admin Vault</h2>
-        <p className="text-zinc-500 text-sm font-medium mb-8">Verification required. Provide your Kinetic Identity Key to access the core console.</p>
+        <p className="text-zinc-500 text-sm font-medium mb-8">Verification required. Select your endpoint and provide identity key.</p>
         
-        <form onSubmit={handleLogin}>
-          <div className="space-y-5">
-            <input 
-              name="appkey" type="password" required placeholder="Identity Key..." 
-              className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-2xl px-5 py-4 text-sm text-zinc-100 outline-none transition-all placeholder:text-zinc-700"
-            />
-            {error && <div className="text-red-400 text-xs font-bold bg-red-500/10 p-3 rounded-xl border border-red-500/20 animate-shake">{error}</div>}
+        <form onSubmit={handleLogin} className="space-y-6">
+          <div className="space-y-4">
+            <div>
+              <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-2 block ml-1">Identity Key</label>
+              <input 
+                name="appkey" type="password" required placeholder="••••••••" 
+                className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 rounded-2xl px-5 py-4 text-sm text-zinc-100 outline-none transition-all placeholder:text-zinc-700"
+              />
+            </div>
+
+            {showConfig ? (
+              <div className="animate-in slide-in-from-top-2 duration-300">
+                <label className="text-[10px] font-black uppercase tracking-widest text-zinc-600 mb-2 block ml-1">Worker Endpoint URL</label>
+                <input 
+                  type="url" value={tempWorkerUrl} onChange={(e) => setTempWorkerUrl(e.target.value)}
+                  className="w-full bg-zinc-950/50 border border-zinc-800 focus:border-amber-500 focus:ring-1 focus:ring-amber-500 rounded-2xl px-5 py-4 text-xs text-zinc-400 outline-none transition-all"
+                />
+              </div>
+            ) : (
+              <button type="button" onClick={() => setShowConfig(true)} className="text-[10px] text-zinc-600 hover:text-emerald-500 font-bold uppercase tracking-tighter ml-1 transition-colors">
+                Configure Worker URL →
+              </button>
+            )}
+
+            {error && <div className="text-red-400 text-xs font-bold bg-red-500/10 p-4 rounded-xl border border-red-500/20 animate-shake">{error}</div>}
+            
             <button type="submit" disabled={loading} className="w-full bg-zinc-100 hover:bg-white disabled:opacity-50 text-zinc-950 font-black py-4 rounded-2xl transition-all shadow-xl shadow-white/5 active:scale-95 flex items-center justify-center gap-2">
               {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Unlock Console'}
             </button>
-            <a href="#landing" className="block text-center text-xs text-zinc-600 hover:text-zinc-400 transition-colors uppercase font-bold tracking-widest">Return to Home</a>
+            <a href="#landing" className="block text-center text-xs text-zinc-600 hover:text-zinc-400 transition-colors uppercase font-bold tracking-widest pt-2">Return to Home</a>
           </div>
         </form>
       </div>
