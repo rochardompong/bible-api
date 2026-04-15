@@ -19,7 +19,13 @@ const app = new Hono<{ Bindings: Env }>()
 // ==========================================
 
 app.use('*', cors({
-  origin: '*',
+  origin: (origin) => {
+    // Hanya mengizinkan domain produksi Cloudflare Pages
+    if (origin.endsWith('.pages.dev')) {
+      return origin;
+    }
+    return null;
+  },
   allowHeaders: ['Content-Type', 'X-App-Key', 'Authorization'],
   allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
 }))
