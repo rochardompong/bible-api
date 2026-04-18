@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createErrorResponse, fetchWithFallback, YOUVERSION_BASE } from './hybrid-fetcher'
+import { createErrorResponse, fetchWithFallback, YOUVERSION_BASE, shouldTrack } from './hybrid-fetcher'
 
 export type Env = {
   BIBLE_CACHE: R2Bucket
@@ -122,6 +122,7 @@ app.delete('/admin/r2/bulk-delete', async (c) => {
 // ==========================================
 // PHASE 3: ADVANCED ANALYTICS TELEMETRY
 // ==========================================
+
 // Endpoint for Flutter App to report client-side events like offline search and download completion
 app.post('/analytics/track', async (c) => {
   if (!c.env.ANALYTICS) return c.json({ success: true, warning: "Analytics Engine not bound" })
@@ -129,6 +130,9 @@ app.post('/analytics/track', async (c) => {
   try {
     const body = await c.req.json()
     const eventType = body.event || 'unknown'
+    
+    if (!shouldTrack(eventType)) return c.json({ success: true, sampled: true })
+
     const bibleId = body.bible_id || 'unknown'
     const query = body.query || ''
     const meta = body.meta || ''
@@ -168,13 +172,73 @@ app.get('/admin/analytics', async (c) => {
             series: analyticsEngineDatasetAdaptiveGroups(
               limit: 100,
               filter: {
-                dataset: "ANALYTICS",
+                dataset: "hybrid_bible_metrics",
                 timestamp_gt: "${sevenDaysAgo}"
               },
               orderBy: [timestamp_DAY]
             ) {
               dimensions { datetime: timestamp_DAY }
               sum { doubles: double1 }
+            }
+          }
+        }
+      }
+    `,
+    bibles: `
+      query {
+        viewer {
+          accounts(filter: {accountTag: "${accountId}"}) {
+            series: analyticsEngineDatasetAdaptiveGroups(
+              limit: 10,
+              filter: {
+                dataset: "hybrid_bible_metrics",
+                timestamp_gt: "${sevenDaysAgo}",
+                blob1_ne: "unknown"
+              },
+              orderBy: [sum_double1_DESC]
+            ) {
+              dimensions { bibleId: blob1 }
+              sum { requests: double1 }
+            }
+          }
+        }
+      }
+    `,
+    search: `
+      query {
+        viewer {
+          accounts(filter: {accountTag: "${accountId}"}) {
+            series: analyticsEngineDatasetAdaptiveGroups(
+              limit: 20,
+              filter: {
+                dataset: "hybrid_bible_metrics",
+                timestamp_gt: "${sevenDaysAgo}",
+                blob0: "search_query"
+              },
+              orderBy: [sum_double1_DESC]
+            ) {
+              dimensions { query: blob2, hasResults: blob3 }
+              sum { count: double1 }
+            }
+          }
+        }
+      }
+    `,
+    download: `
+      query {
+        viewer {
+          accounts(filter: {accountTag: "${accountId}"}) {
+            series: analyticsEngineDatasetAdaptiveGroups(
+              limit: 20,
+              filter: {
+                dataset: "hybrid_bible_metrics",
+                timestamp_gt: "${sevenDaysAgo}",
+                blob0_in: ["download_started", "download_completed"]
+              },
+              orderBy: [timestamp_DAY]
+            ) {
+              dimensions { datetime: timestamp_DAY, event: blob0 }
+              sum { count: double1 }
             }
           }
         }
@@ -218,6 +282,15 @@ app.get('/bibles', (c) => fetchWithFallback(c, 'bibles/index.json', '/bibles'))
 
 app.get('/bibles/:bible_id', (c) => {
   const { bible_id } = c.req.param()
+  
+  if (c.env.ANALYTICS && shouldTrack('bible_accessed')) {
+    c.env.ANALYTICS.writeDataPoint({
+      blobs: ['bible_accessed', bible_id, 'unknown', 'direct_lookup', 'worker_native'],
+      doubles: [1],
+      indexes: ['bible_accessed']
+    })
+  }
+
   return fetchWithFallback(c, `bibles/${bible_id}.json`, `/bibles/${bible_id}`)
 })
 
@@ -258,16 +331,17 @@ app.get('/bibles/:bible_id/chapters/:chapter_id', (c) => {
 // VERSES with Predictive Prefetch & Native Usage Analytics (Phase 3)
 app.get('/bibles/:bible_id/chapters/:chapter_id/verses', (c) => {
   const { bible_id, chapter_id } = c.req.param()
-  
-  if (c.env.ANALYTICS) {
+
+  if (c.env.ANALYTICS && shouldTrack('chapter_opened')) {
     c.env.ANALYTICS.writeDataPoint({
-      blobs: ['usage', bible_id, chapter_id, 'verses_endpoint', 'worker_native'],
+      blobs: ['chapter_opened', bible_id, 'unknown', chapter_id, 'worker_native'],
       doubles: [1],
-      indexes: ['usage']
+      indexes: ['chapter_opened']
     })
   }
-  
+
   // Phase 2: Predictive prefetch chapter N+1
+
   c.executionCtx.waitUntil((async () => {
     // Attempt parsing e.g. GEN.1 -> GEN.2
     const parts = chapter_id.split('.')

@@ -3,6 +3,16 @@ import { Env } from './index'
 
 export const YOUVERSION_BASE = 'https://api.youversion.com/v1'
 
+export function shouldTrack(eventType: string): boolean {
+  const rand = Math.random()
+  switch (eventType) {
+    case 'cache_hit':
+    case 'cache_miss':    return rand < 0.10  // 10% sampling
+    case 'chapter_opened': return rand < 0.20  // 20% sampling
+    default:               return true         // 100% for others
+  }
+}
+
 export async function fetchWithFallback(
   c: Context<{ Bindings: Env }>,
   cacheKey: string,
@@ -17,7 +27,7 @@ export async function fetchWithFallback(
       const cached = await bucket.get(cacheKey)
       if (cached) {
         // Analytics tracking for cache hit
-        if (c.env.ANALYTICS) {
+        if (c.env.ANALYTICS && shouldTrack('cache_hit')) {
           c.env.ANALYTICS.writeDataPoint({
             blobs: ['cache_hit', youversionPath],
             doubles: [1]
@@ -37,7 +47,7 @@ export async function fetchWithFallback(
   }
 
   // Analytics tracking for cache miss
-  if (c.env.ANALYTICS) {
+  if (c.env.ANALYTICS && shouldTrack('cache_miss')) {
     c.env.ANALYTICS.writeDataPoint({
       blobs: ['cache_miss', youversionPath],
       doubles: [1]
