@@ -6,35 +6,36 @@
 
 @layer base {
   :root {
-    --background: 210 20% 98%; /* #f7f9fb */
-    --foreground: 200 9% 11%; /* #191c1e */
+    /* Dark Mode Defaults (zinc/slate base) */
+    --background: 240 10% 4%; /* zinc-950 */
+    --foreground: 0 0% 98%; /* zinc-50 */
 
-    --card: 0 0% 100%;
-    --card-foreground: 200 9% 11%;
+    --card: 240 10% 4%; /* zinc-950 */
+    --card-foreground: 0 0% 98%; /* zinc-50 */
 
-    --popover: 0 0% 100%;
-    --popover-foreground: 200 9% 11%;
+    --popover: 240 10% 4%; /* zinc-950 */
+    --popover-foreground: 0 0% 98%; /* zinc-50 */
 
-    --primary: 0 0% 0%; /* #000000 */
-    --primary-foreground: 0 0% 100%; /* #ffffff */
+    --primary: 0 0% 98%; /* zinc-50 */
+    --primary-foreground: 240 5.9% 10%; /* zinc-900 */
 
-    --secondary: 216 80% 90%; /* #d0e1fb */
-    --secondary-foreground: 215 18% 40%; /* #54647a */
+    --secondary: 240 3.7% 15.9%; /* zinc-800 */
+    --secondary-foreground: 0 0% 98%; /* zinc-50 */
 
-    --muted: 210 20% 96%; /* #f2f4f6 */
-    --muted-foreground: 215 14% 34%; 
+    --muted: 240 3.7% 15.9%; /* zinc-800 */
+    --muted-foreground: 240 5% 64.9%; /* zinc-400 */
 
-    --accent: 210 20% 90%; /* #e6e8ea */
-    --accent-foreground: 200 9% 11%;
+    --accent: 240 3.7% 15.9%; /* zinc-800 */
+    --accent-foreground: 0 0% 98%; /* zinc-50 */
 
-    --destructive: 0 74% 42%;
-    --destructive-foreground: 0 0% 100%;
+    --destructive: 0 62.8% 30.6%;
+    --destructive-foreground: 0 0% 98%;
 
-    --border: 240 6% 79%; /* c6c6cd outline-variant updated */
-    --input: 240 6% 79%;
-    --ring: 0 0% 0%;
+    --border: 240 3.7% 15.9%; /* zinc-800 */
+    --input: 240 3.7% 15.9%;
+    --ring: 240 4.9% 83.9%;
 
-    --radius: 0.25rem;
+    --radius: 0.5rem;
   }
 }
 
@@ -43,27 +44,16 @@
     @apply border-border;
   }
   body {
-    @apply bg-background text-on-surface font-sans antialiased;
+    /* Enforce Dark Mode styles to HTML body */
+    @apply bg-background text-foreground font-sans antialiased;
+    color-scheme: dark;
   }
   h1, h2, h3, h4, h5, h6 {
     @apply tracking-tight;
   }
 }
 
-@layer utilities {
-  .text-display-lg {
-    @apply text-5xl font-semibold tracking-[-0.04em];
-  }
-  .text-display-md {
-    @apply text-4xl font-semibold tracking-[-0.04em];
-  }
-  .text-display-sm {
-    @apply text-3xl font-semibold tracking-[-0.04em];
-  }
-  .glass-panel {
-    @apply bg-surface-container-lowest/85 backdrop-blur-[12px];
-  }
-  .btn-kinetic {
-    @apply rounded-xl transition-all duration-200 hover:shadow-ambient hover:bg-primary-container;
-  }
+/* Base global class to force dark mode on the whole app */
+.dark {
+  color-scheme: dark;
 }
