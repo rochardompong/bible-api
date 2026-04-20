@@ -322,8 +322,10 @@ app.get('/bibles/:bible_id/chapters/:chapter_id', (c) => {
   return fetchWithFallback(c, `bibles/${bible_id}/chapters/${chapter_id}.json`, `/bibles/${bible_id}/chapters/${chapter_id}`)
 })
 
+app.get('/countries', (c) => fetchWithFallback(c, 'countries/index.json', '/languages'))
+
 // VERSES with Predictive Prefetch & Native Usage Analytics (Phase 3)
-app.get('/bibles/:bible_id/chapters/:chapter_id/verses', (c) => {
+app.get('/bibles/:bible_id/chapters/:chapter_id/verses', async (c) => {
   const { bible_id, chapter_id } = c.req.param()
 
   if (c.env.ANALYTICS && shouldTrack('chapter_opened')) {
@@ -334,47 +336,63 @@ app.get('/bibles/:bible_id/chapters/:chapter_id/verses', (c) => {
     })
   }
 
-  // Phase 2: Predictive prefetch chapter N+1
+  const cacheKey = `bibles/${bible_id}/chapters/${chapter_id}/verses.json`
+  const bucket = c.env.BIBLE_CACHE
 
-  c.executionCtx.waitUntil((async () => {
-    // Attempt parsing e.g. GEN.1 -> GEN.2
-    const parts = chapter_id.split('.')
-    if (parts.length >= 2) {
-      const num = parseInt(parts[1])
-      if (!isNaN(num)) {
-        const nextChapterId = `${parts[0]}.${num + 1}`
-        const nextCacheKey = `bibles/${bible_id}/chapters/${nextChapterId}/verses.json`
-        
-        if (c.env.BIBLE_CACHE) {
-          const exists = await c.env.BIBLE_CACHE.head(nextCacheKey)
-          if (!exists) {
-            // It's missing in R2, fetch silently from upstream
-            if (c.env.YOUVERSION_API_KEY) {
-              try {
-                const fetchRes = await fetch(`${YOUVERSION_BASE}/bibles/${bible_id}/chapters/${nextChapterId}/verses`, {
-                  headers: {
-                    'Accept': 'application/json',
-                    'X-YVP-App-Key': c.env.YOUVERSION_API_KEY
-                  }
-                })
-                if (fetchRes.ok) {
-                  const text = await fetchRes.text()
-                  await c.env.BIBLE_CACHE.put(nextCacheKey, text, {
-                    httpMetadata: { contentType: 'application/json' }
-                  })
-                  console.log(`[PREFETCH] Cached ${nextCacheKey} successfully.`)
-                }
-              } catch (e) {
-                console.error(`[PREFETCH ERROR] ${nextCacheKey}:`, e)
-              }
-            }
-          }
-        }
-      }
+  // 1. Cek R2 Cache
+  if (bucket) {
+    const cached = await bucket.get(cacheKey)
+    if (cached) {
+      const headers = new Headers()
+      cached.writeHttpMetadata(headers)
+      headers.set('etag', cached.httpEtag)
+      headers.set('X-Cache-Status', 'HIT')
+      return new Response(cached.body, { headers })
     }
-  })())
+  }
 
-  return fetchWithFallback(c, `bibles/${bible_id}/chapters/${chapter_id}/verses.json`, `/bibles/${bible_id}/chapters/${chapter_id}/verses`)
+  // 2. Fallback Khusus Verses (Ekstraksi dari Chapter API YouVersion)
+  const apiKey = c.env.YOUVERSION_API_KEY
+  if (!apiKey) {
+    return createErrorResponse(c, 500, 'INTERNAL_SERVER_ERROR', 'API Key not configured')
+  }
+
+  try {
+    // PANGGILAN YANG BENAR KE YOUVERSION (Tanpa /verses)
+    const fallbackUrl = `${YOUVERSION_BASE}/bibles/${bible_id}/chapters/${chapter_id}`
+    const response = await fetch(fallbackUrl, {
+      headers: { 'Accept': 'application/json', 'X-YVP-App-Key': apiKey }
+    })
+
+    if (!response.ok) {
+      if (response.status === 404) return createErrorResponse(c, 404, 'NOT_FOUND', 'Chapter not found')
+      return createErrorResponse(c, 502, 'BAD_GATEWAY', 'Failed to fetch from Upstream')
+    }
+
+    const yvData: any = await response.json()
+    // YouVersion menyimpan ayat di dalam yvData.data.verses atau yvData.verses
+    const versesArray = (yvData.data && yvData.data.verses) ? yvData.data.verses : (yvData.verses || [])
+    
+    // Format standar Worker kita: { data: [...] }
+    const finalData = { data: versesArray }
+    const finalJson = JSON.stringify(finalData)
+
+    // Auto-Cache ke R2 di background
+    if (bucket) {
+      c.executionCtx.waitUntil(
+        bucket.put(cacheKey, finalJson, { httpMetadata: { contentType: 'application/json' } })
+      )
+    }
+
+    return new Response(finalJson, {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', 'X-Cache-Status': 'MISS' }
+    })
+
+  } catch (err) {
+    console.error('Fetch verses fallback error:', err)
+    return createErrorResponse(c, 504, 'GATEWAY_TIMEOUT', 'Upstream error')
+  }
 })
 
 app.get('/bibles/:bible_id/verses/:verse_id', async (c) => {

@@ -8,7 +8,7 @@ const YOUVERSION_BASE = 'https://api.youversion.com/v1'
 const API_KEY = process.env.YOUVERSION_API_KEY
 const R2_BUCKET = process.env.R2_BUCKET_NAME
 const PRIORITY_LANGUAGES = process.env.PRIORITY_LANGUAGES ? process.env.PRIORITY_LANGUAGES.split(',') : ['ENG', 'IND']
-const MAX_DYNAMIC = process.env.MAX_DYNAMIC_LANGUAGES ? parseInt(process.env.MAX_DYNAMIC_LANGUAGES) : 5
+const MAX_DYNAMIC = process.env.MAX_DYNAMIC_LANGUAGES ? parseInt(process.env.MAX_DYNAMIC_LANGUAGES) : 10
 
 const s3Client = new S3Client({
   region: 'auto',
@@ -47,6 +47,32 @@ async function fetchFromYV(endpoint: string) {
     console.error(`Error fetching ${endpoint}:`, error.message)
     return null
   }
+}
+
+// Helper untuk fetch dengan pagination penuh
+async function fetchAllPages(baseEndpoint: string) {
+  let allData: any[] = []
+  let pageToken: string | null = null
+  let safetyCounter = 0
+  const maxPages = 500 // Mencegah infinite loop
+
+  do {
+    const connector = baseEndpoint.includes('?') ? '&' : '?'
+    const endpoint = pageToken ? `${baseEndpoint}${connector}page_token=${pageToken}` : baseEndpoint
+    const data = await fetchFromYV(endpoint)
+    
+    if (data && data.data) {
+      allData = allData.concat(data.data)
+      pageToken = data.next_page_token
+    } else {
+      pageToken = null
+    }
+    
+    safetyCounter++
+    await new Promise(resolve => setTimeout(resolve, 500)) // Rate limit protection
+  } while (pageToken && safetyCounter < maxPages)
+
+  return allData
 }
 
 async function saveToR2(key: string, data: any) {
@@ -96,87 +122,141 @@ async function saveState(state: ScraperState) {
   await saveToR2('scraper/state.json', state)
 }
 
-async function scrapeLanguages() {
-  console.log('--- Level 1: Scraping Languages ---')
-  let allLangs: any[] = []
-  let pageToken: string | null = null
-  
-  for (let i = 0; i < 200; i++) {
-    const endpoint = `/languages${pageToken ? '?page_token=' + pageToken : ''}`
-    const data = await fetchFromYV(endpoint)
-    
-    if (data && data.data) {
-      allLangs = allLangs.concat(data.data)
-      pageToken = data.next_page_token
-      await new Promise(resolve => setTimeout(resolve, 500))
-      if (!pageToken) break
-    } else {
-      break
-    }
-  }
-  
-  if (allLangs.length > 0) {
-    await saveToR2('languages/index.json', { data: allLangs, total_size: allLangs.length })
-  }
+// Mapping manual untuk negara utama jika API tidak menyediakan
+const COUNTRY_MAP: Record<string, any> = {
+  'eng': { code: 'US', name: 'United States', flag: '🇺🇸', aliases: ['GB', 'AU', 'CA'] },
+  'id': { code: 'ID', name: 'Indonesia', flag: '🇮🇩', aliases: [] },
+  'spa': { code: 'ES', name: 'Spain', flag: '🇪🇸', aliases: ['MX', 'AR'] },
+  'fra': { code: 'FR', name: 'France', flag: '🇫🇷', aliases: ['CA'] },
+  'por': { code: 'PT', name: 'Portugal', flag: '🇵🇹', aliases: ['BR'] },
+  'zho': { code: 'CN', name: 'China', flag: '🇨🇳', aliases: ['TW', 'HK'] },
+  'arb': { code: 'SA', name: 'Saudi Arabia', flag: '🇸🇦', aliases: ['AE', 'EG'] },
+  'hin': { code: 'IN', name: 'India', flag: '🇮🇳', aliases: [] },
+  'rus': { code: 'RU', name: 'Russia', flag: '🇷🇺', aliases: [] },
+  'jpn': { code: 'JP', name: 'Japan', flag: '🇯🇵', aliases: [] },
+  'deu': { code: 'DE', name: 'Germany', flag: '🇩🇪', aliases: [] },
+  'kor': { code: 'KR', name: 'South Korea', flag: '🇰🇷', aliases: [] },
 }
 
-async function scrapeBibles(state: ScraperState) {
-  console.log('--- Level 2: Scraping Bibles ---')
-  const langData = await getFromR2('languages/index.json')
-  const languagesData = langData ? langData.data : []
+async function discoverBiblesAndLanguages() {
+  console.log('--- Level 1: Discovering Bibles, Languages & Countries ---')
   
-  const forcedLangs = PRIORITY_LANGUAGES.map(l => l.trim().toUpperCase())
-  let dynamicLangs: string[] = []
+  // 1. Fetch ALL Bibles dengan pagination
+  console.log('Fetching all bibles globally...')
+  const allBiblesRaw = await fetchAllPages('/bibles')
+  console.log(`Found ${allBiblesRaw.length} total bibles in YouVersion.`)
+
+  // 2. Filter: Wajib punya GEN (Kejadian) dan MAT (Matius)
+  const completeBibles = allBiblesRaw.filter((b: any) => {
+    if (!b.books || !Array.isArray(b.books)) return false
+    return b.books.includes('GEN') && b.books.includes('MAT')
+  })
+  console.log(`${completeBibles.length} bibles have complete OT+NT.`)
+
+  // 3. Kelompokkan berdasarkan bahasa & ambil Top 3
+  const biblesByLang: Record<string, any[]> = {}
+  const langMetadata: Record<string, any> = {}
+
+  for (const bible of completeBibles) {
+    // YouVersion Bible object biasanya punya .language (objek) atau .language_tag (string)
+    // Sesuai format API v1: bible.language adalah object { id, tag, name, local_name, countries }
+    const langObj = bible.language || {}
+    const tag = (langObj.tag || langObj.id || bible.language_tag || 'unknown').toLowerCase()
+    
+    if (tag === 'unknown') continue
+
+    if (!biblesByLang[tag]) {
+      biblesByLang[tag] = []
+      langMetadata[tag] = langObj
+    }
+    biblesByLang[tag].push(bible)
+  }
+
+  const forcedLangs = PRIORITY_LANGUAGES.map(l => l.trim().toLowerCase())
+  const availableLangTags = Object.keys(biblesByLang)
   
-  if (languagesData && languagesData.length > 0) {
-    const sortedLangs = [...languagesData].sort((a: any, b: any) => {
-      const popA = a.speaking_population || a.writing_population || 0
-      const popB = b.speaking_population || b.writing_population || 0
-      return popB - popA
+  // Sortir bahasa berdasarkan jumlah Alkitab yang tersedia (sebagai proxy popularitas)
+  availableLangTags.sort((a, b) => biblesByLang[b].length - biblesByLang[a].length)
+
+  const dynamicLangs = availableLangTags
+    .filter(tag => !forcedLangs.includes(tag))
+    .slice(0, MAX_DYNAMIC)
+
+  const targetLanguages = [...new Set([...forcedLangs, ...dynamicLangs])]
+  console.log(`Selected target languages: ${targetLanguages.join(', ')}`)
+
+  const finalBibles: any[] = []
+  const finalLanguages: any[] = []
+  const countriesMap: Record<string, any> = {}
+
+  for (const tag of targetLanguages) {
+    if (!biblesByLang[tag]) continue
+
+    // Ambil Top 3 Alkitab untuk bahasa ini
+    const top3 = biblesByLang[tag].slice(0, 3)
+    finalBibles.push(...top3)
+
+    // Susun metadata bahasa yang bersih
+    const rawLang = langMetadata[tag]
+    const langEntry = {
+      id: rawLang.id || tag,
+      tag: tag,
+      name: rawLang.name || tag,
+      local_name: rawLang.local_name || rawLang.name || tag,
+      countries: rawLang.countries || [],
+      bible_count: top3.length
+    }
+    finalLanguages.push(langEntry)
+
+    // Susun pemetaan Negara
+    let primaryCountryCode = (langEntry.countries && langEntry.countries.length > 0) 
+      ? langEntry.countries[0] 
+      : null
+
+    let countryData = COUNTRY_MAP[tag] || COUNTRY_MAP[tag.substring(0,2)]
+    
+    if (!countryData && primaryCountryCode) {
+      // Fallback jika tidak ada di map manual
+      countryData = { code: primaryCountryCode, name: primaryCountryCode, flag: '🌐', aliases: [] }
+    } else if (!countryData) {
+       countryData = { code: tag.toUpperCase(), name: langEntry.name, flag: '🌐', aliases: [] }
+    }
+
+    const cCode = countryData.code
+    if (!countriesMap[cCode]) {
+      countriesMap[cCode] = {
+        country_code: cCode,
+        name: countryData.name,
+        flag_emoji: countryData.flag,
+        languages: []
+      }
+    }
+    
+    countriesMap[cCode].languages.push({
+      tag: tag,
+      name: langEntry.local_name,
+      is_primary: countriesMap[cCode].languages.length === 0
     })
-
-    dynamicLangs = sortedLangs
-      .map((l: any) => (l.tag || l.id || l.language || '').toUpperCase())
-      .filter(tag => tag && !forcedLangs.includes(tag))
-      .slice(0, MAX_DYNAMIC)
   }
 
-  const targetLanguages = [...forcedLangs, ...dynamicLangs]
-  console.log(`Target Languages: ${targetLanguages.join(', ')}`)
-
-  let targeted: any[] = []
+  // 4. Simpan hasil yang sudah sangat ramping dan terkurasi ke R2
+  const finalCountries = Object.values(countriesMap)
   
-  const startIdx = state.progress.lang_index || 0
+  console.log(`Saving ${finalLanguages.length} Languages (Clean)`)
+  await saveToR2('languages/index.json', { data: finalLanguages, total_active_languages: finalLanguages.length })
+  
+  console.log(`Saving ${finalCountries.length} Countries (For UI)`)
+  await saveToR2('countries/index.json', { data: finalCountries })
 
-  for (let i = startIdx; i < targetLanguages.length; i++) {
-    const lang = targetLanguages[i]
-    const data = await fetchFromYV(`/bibles?language_ranges[]=${lang}`)
-    
-    if (data && data.data) {
-      // Filter wajib: Old + New Testament lengkap (mengandung kitab 'GEN' dan 'MAT')
-      const completeBibles = data.data.filter((b: any) => {
-        if (!b.books || !Array.isArray(b.books)) return false
-        return b.books.includes('GEN') && b.books.includes('MAT')
-      })
-      
-      const top3 = completeBibles.slice(0, 3)
-      targeted = targeted.concat(top3)
-    }
-    
-    state.progress.lang_index = i + 1
-    await saveState(state)
-  }
-
-  if (targeted.length > 0) {
-    await saveToR2('bibles/index.json', { data: targeted })
-    for (const bible of targeted) {
-      await saveToR2(`bibles/${bible.id}.json`, { data: bible })
-    }
+  console.log(`Saving ${finalBibles.length} Bibles`)
+  await saveToR2('bibles/index.json', { data: finalBibles })
+  for (const bible of finalBibles) {
+    await saveToR2(`bibles/${bible.id}.json`, { data: bible })
   }
 }
 
 async function scrapeBooks(state: ScraperState) {
-  console.log('--- Level 3: Scraping Books ---')
+  console.log('--- Level 2: Scraping Books (With Pagination) ---')
   const biblesData = await getFromR2('bibles/index.json')
   const bibles = biblesData ? biblesData.data : []
   
@@ -187,19 +267,19 @@ async function scrapeBooks(state: ScraperState) {
   for (let i = startIdx; i < bibles.length; i++) {
     const bibleId = bibles[i].id
     console.log(`-- Fetching Books for Bible ${bibleId} --`)
-    const booksData = await fetchFromYV(`/bibles/${bibleId}/books`)
-    if (booksData) {
-      await saveToR2(`bibles/${bibleId}/books.json`, booksData)
+    // Gunakan fetchAllPages untuk Kitab (mengantisipasi kitab Apokrifa yang banyak)
+    const booksData = await fetchAllPages(`/bibles/${bibleId}/books`)
+    if (booksData && booksData.length > 0) {
+      await saveToR2(`bibles/${bibleId}/books.json`, { data: booksData })
     }
     state.progress.bible_index = i + 1
     await saveState(state)
   }
-  // reset progress for next level
   state.progress = {}
 }
 
 async function scrapeChapters(state: ScraperState) {
-  console.log('--- Level 4: Scraping Chapters ---')
+  console.log('--- Level 3: Scraping Chapters (With Pagination) ---')
   const biblesData = await getFromR2('bibles/index.json')
   const bibles = biblesData ? biblesData.data : []
   
@@ -216,9 +296,10 @@ async function scrapeChapters(state: ScraperState) {
     if (books && books.length > 0) {
       for (; bookIdx < books.length; bookIdx++) {
         const bookId = books[bookIdx].id
-        const chaptersData = await fetchFromYV(`/bibles/${bibleId}/books/${bookId}/chapters`)
-        if (chaptersData) {
-          await saveToR2(`bibles/${bibleId}/books/${bookId}/chapters.json`, chaptersData)
+        // Gunakan fetchAllPages untuk Pasal (mengantisipasi kitab Mazmur yang 150 pasal)
+        const chaptersData = await fetchAllPages(`/bibles/${bibleId}/books/${bookId}/chapters`)
+        if (chaptersData && chaptersData.length > 0) {
+          await saveToR2(`bibles/${bibleId}/books/${bookId}/chapters.json`, { data: chaptersData })
         }
         
         state.progress.bible_index = bibleIdx
@@ -226,14 +307,13 @@ async function scrapeChapters(state: ScraperState) {
         await saveState(state)
       }
     }
-    // reset book index for next bible
     bookIdx = 0
   }
   state.progress = {}
 }
 
 async function generateIndex(state: ScraperState) {
-  console.log('--- Level 5: Generating /index ---')
+  console.log('--- Level 4: Generating /index ---')
   const biblesData = await getFromR2('bibles/index.json')
   const bibles = biblesData ? biblesData.data : []
   
@@ -272,7 +352,7 @@ async function generateIndex(state: ScraperState) {
 }
 
 async function scrapeVOTD() {
-  console.log('--- Level 6: Scraping VOTD ---')
+  console.log('--- Level 5: Scraping VOTD ---')
   const today = new Date()
   const year = today.getFullYear()
   const day = Math.floor((today.getTime() - new Date(today.getFullYear(), 0, 0).getTime()) / 1000 / 60 / 60 / 24)
@@ -300,7 +380,7 @@ async function runStateMachine() {
 
   try {
     if (state.current_level === 1) {
-      await scrapeLanguages()
+      await discoverBiblesAndLanguages()
       state.completed_levels.push(1)
       state.current_level = 2
       state.progress = {}
@@ -308,7 +388,7 @@ async function runStateMachine() {
     }
 
     if (state.current_level === 2) {
-      await scrapeBibles(state)
+      await scrapeBooks(state)
       state.completed_levels.push(2)
       state.current_level = 3
       state.progress = {}
@@ -316,7 +396,7 @@ async function runStateMachine() {
     }
 
     if (state.current_level === 3) {
-      await scrapeBooks(state)
+      await scrapeChapters(state)
       state.completed_levels.push(3)
       state.current_level = 4
       state.progress = {}
@@ -324,7 +404,7 @@ async function runStateMachine() {
     }
 
     if (state.current_level === 4) {
-      await scrapeChapters(state)
+      await generateIndex(state)
       state.completed_levels.push(4)
       state.current_level = 5
       state.progress = {}
@@ -332,16 +412,8 @@ async function runStateMachine() {
     }
 
     if (state.current_level === 5) {
-      await generateIndex(state)
-      state.completed_levels.push(5)
-      state.current_level = 6
-      state.progress = {}
-      await saveState(state)
-    }
-
-    if (state.current_level === 6) {
       await scrapeVOTD()
-      state.completed_levels.push(6)
+      state.completed_levels.push(5)
       state.status = 'completed'
       state.progress = {}
       await saveState(state)
