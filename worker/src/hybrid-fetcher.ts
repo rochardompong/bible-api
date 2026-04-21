@@ -178,7 +178,6 @@ export async function fetchPassageAndParse(
   const bucket = c.env.BIBLE_CACHE
   const apiKey = c.env.YOUVERSION_API_KEY
 
-  // 1. Cek R2 Cache (Sama seperti fetchWithFallback)
   if (bucket) {
     const cached = await bucket.get(cacheKey)
     if (cached) {
@@ -194,11 +193,13 @@ export async function fetchPassageAndParse(
   }
 
   try {
-    // 2. Fallback ke YouVersion dengan minta format HTML
-    const fallbackUrl = `${YOUVERSION_BASE}${youversionPath}`
+    // Tambahkan parameter wajib YouVersion: ?format=html agar teks memiliki tag <span class="v">
+    const separator = youversionPath.includes('?') ? '&' : '?';
+    const fallbackUrl = `${YOUVERSION_BASE}${youversionPath}${separator}format=html`;
+    
     const response = await fetch(fallbackUrl, {
       headers: {
-        'Accept': 'text/html', // Minta HTML agar bisa diparse
+        'Accept': 'application/json',
         'X-YVP-App-Key': apiKey
       }
     })
@@ -207,17 +208,38 @@ export async function fetchPassageAndParse(
        return createErrorResponse(c, response.status, 'UPSTREAM_ERROR', 'Failed to fetch from YouVersion')
     }
 
-    const html = await response.text();
-    
-    // 3. Bedah HTML menjadi JSON Terstruktur
-    const structuredVerses = parseVersesFromHtml(html);
+    const yvData: any = await response.json()
+    let structuredVerses: any[] = []
+
+    // Skenario 1: YouVersion memberikan array verses asli
+    if (yvData.data && Array.isArray(yvData.data.verses) && yvData.data.verses.length > 0) {
+      structuredVerses = yvData.data.verses.map((v: any) => ({
+         id: v.id || v.verseId || '',
+         verseId: v.id || v.verseId || '',
+         content: v.content || v.text || ''
+      }))
+    } 
+    // Skenario 2: YouVersion mengembalikan satu string HTML panjang (content)
+    else if (yvData.content || (yvData.data && yvData.data.content)) {
+      const rawContent = yvData.content || yvData.data.content
+      structuredVerses = parseVersesFromHtml(rawContent)
+      
+      // Fallback Darurat: Jika parser HTML gagal (array kosong), kembalikan paragraf utuh sebagai "ayat 1"
+      if (structuredVerses.length === 0) {
+        structuredVerses = [{
+          id: "1",
+          verseId: "1",
+          content: rawContent.replace(/<[^>]*>/g, '').trim() // Bersihkan tag HTML
+        }]
+      }
+    }
+
     const finalData = { 
        data: structuredVerses,
        meta: { source: 'YouVersion-Parsed', fetched_at: new Date().toISOString() }
     };
     const finalJson = JSON.stringify(finalData);
 
-    // 4. Simpan ke R2 secara permanen
     if (bucket) {
       c.executionCtx.waitUntil(
         bucket.put(cacheKey, finalJson, { httpMetadata: { contentType: 'application/json' } })
