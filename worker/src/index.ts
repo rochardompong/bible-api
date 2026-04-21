@@ -8,6 +8,7 @@ export type Env = {
   ANALYTICS: AnalyticsEngineDataset
   APP_KEY: string
   YOUVERSION_API_KEY: string
+  NVIDIA_API_KEY: string
   CF_ACCOUNT_ID: string
   CF_API_TOKEN: string
 }
@@ -255,14 +256,72 @@ app.get('/admin/analytics', async (c) => {
     const result: any = await res.json();
     return c.json({ data: result.data || result.errors });
   } catch (err: any) {
-    return createErrorResponse(c, 502, 'GATEWAY_ERROR', 'Failed to fetch from Analytics Engine API')
+  return createErrorResponse(c, 502, 'GATEWAY_ERROR', 'Failed to fetch from Analytics Engine API')
   }
-})
+  })
 
-// ==========================================
-// BIBLE API ENDPOINTS
-// ==========================================
+  // ==========================================
+  // PHASE 4: AI BIBLE STUDY FEATURES
+  // ==========================================
 
+  app.post('/ai/explain', async (c) => {
+  const { bible_id, verse_id, passage, user_id } = await c.req.json()
+  const apiKey = c.env.NVIDIA_API_KEY
+
+  if (!apiKey) {
+  return createErrorResponse(c, 500, 'AI_CONFIG_ERROR', 'AI service not configured.')
+  }
+
+  const systemPrompt = `You are LUMINA, an enlightened theological assistant. 
+  Explain the following Bible passage in a deep, theological, yet accessible way. 
+  Provide historical context, spiritual meaning, and practical application. 
+  Tone: Scholarly, encouraging, and illuminated.
+  Format: Use Markdown for structure.`;
+
+  const userPrompt = `Verse Reference: ${verse_id} (Bible Version: ${bible_id})
+  Content: "${passage}"
+
+  Please illuminate the meaning of this scripture.`;
+
+  // NVIDIA NIM API call (OpenAI compatible)
+  const nvidiaRes = await fetch("https://integrate.api.nvidia.com/v1/chat/completions", {
+  method: "POST",
+  headers: {
+    "Authorization": `Bearer ${apiKey}`,
+    "Content-Type": "application/json",
+  },
+  body: JSON.stringify({
+    model: "meta/llama-3.1-405b-instruct",
+    messages: [
+      { role: "system", content: systemPrompt },
+      { role: "user", content: userPrompt }
+    ],
+    temperature: 0.2,
+    top_p: 0.7,
+    max_tokens: 1024,
+    stream: true,
+  }),
+  });
+
+  if (!nvidiaRes.ok) {
+  const errText = await nvidiaRes.text()
+  console.error('NVIDIA AI Error:', errText)
+  return createErrorResponse(c, 502, 'AI_SERVICE_ERROR', 'Failed to reach NVIDIA AI.')
+  }
+
+  // Handle Streaming Response (SSE)
+  return new Response(nvidiaRes.body, {
+  headers: {
+    "Content-Type": "text/event-stream",
+    "Cache-Control": "no-cache",
+    "Connection": "keep-alive",
+  },
+  });
+  })
+
+  // ==========================================
+  // BIBLE API ENDPOINTS
+  // ==========================================
 app.get('/', (c) => {
   return c.json({
     message: 'Hybrid Bible API Worker is running!',
