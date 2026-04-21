@@ -264,8 +264,23 @@ app.get('/admin/analytics', async (c) => {
   // PHASE 4: AI BIBLE STUDY FEATURES
   // ==========================================
 
-  app.post('/ai/explain', async (c) => {
-  const { bible_id, verse_id, passage, user_id } = await c.req.json()
+  app.get('/admin/debug/html', async (c) => {
+    const bibleId = c.req.query('bible') || '12'
+    const passageId = c.req.query('passage') || 'GEN.1'
+    const apiKey = c.env.YOUVERSION_API_KEY
+
+    const fallbackUrl = `${YOUVERSION_BASE}/bibles/${bibleId}/passages/${passageId}`
+    const response = await fetch(fallbackUrl, {
+      headers: {
+        'Accept': 'text/html',
+        'X-YVP-App-Key': apiKey
+      }
+    })
+    const html = await response.text()
+    return new Response(html, { headers: { 'Content-Type': 'text/plain' } })
+  })
+
+  app.post('/ai/explain', async (c) => {  const { bible_id, verse_id, passage, user_id } = await c.req.json()
   const apiKey = c.env.NVIDIA_API_KEY
 
   if (!apiKey) {
