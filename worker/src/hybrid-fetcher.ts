@@ -131,37 +131,43 @@ export function createErrorResponse(
 }
 
 /**
- * Membedah HTML dari YouVersion untuk mengekstrak array ayat yang terstruktur.
+ * Membedah teks polos dari YouVersion untuk mengekstrak array ayat yang terstruktur.
+ * Menangani teks di mana angka ayat sering menyatu dengan kata pertama (misal: "1Now these are...")
  */
-export function parseVersesFromHtml(html: string): any[] {
+export function parseVersesFromText(rawContent: string): any[] {
   const verses: any[] = [];
   
-  // Mencari semua span dengan class "v" (nomor ayat) dan teks setelahnya
-  // Format khas YV: <span class="v">1</span><span class="content">Teks...</span>
-  // Atau versi modern: <span class="verse" data-usfm="...">
-  
-  // 1. Ekstrak nomor ayat dan konten
-  // Gunakan regex yang cukup luwes untuk menangkap berbagai variasi class penanda ayat
-  const verseRegex = /<span class="(?:v|verse)"[^>]*>([\d-]+)<\/span>([\s\S]*?)(?=<span class="(?:v|verse)"|$)/g;
+  // Bersihkan tag HTML terlebih dahulu jika ada
+  let cleanText = rawContent.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ');
+
+  // Regex untuk memecah berdasarkan angka ayat.
+  // Pola: (Mulai baris ATAU spasi) + (Angka) + (Spasi opsional) + (Teks sampai angka berikutnya atau akhir)
+  const regex = /(?:^|\s)(\d+)\s*([\s\S]*?)(?=(?:\s\d+\s*[A-Za-z])|$)/g;
   
   let match;
-  while ((match = verseRegex.exec(html)) !== null) {
-    const number = match[1].trim();
-    let content = match[2];
+  while ((match = regex.exec(cleanText)) !== null) {
+    const verseNum = match[1];
+    let verseText = match[2].trim();
     
-    // Bersihkan konten dari sisa tag HTML
-    content = content.replace(/<[^>]*>/g, '') // Hapus tag
-                     .replace(/&nbsp;/g, ' ') // Ganti spasi entitas
-                     .replace(/\s+/g, ' ')    // Normalisasi spasi
-                     .trim();
-    
-    if (content) {
-      verses.push({
-        id: number, // Sebagai ID lokal dalam array
-        verseId: number,
-        content: content
-      });
-    }
+    // Kadang YouVersion menyatukan angka dengan huruf pertama tanpa spasi (misal "1Now").
+    // Jika regex menangkap "Now" sebagai bagian dari teks, itu sudah benar.
+    // Pastikan tidak ada angka ayat yang tertinggal di awal teks
+    verseText = verseText.replace(/^\d+\s*/, '');
+
+    verses.push({
+      id: verseNum,
+      verseId: verseNum,
+      content: verseText
+    });
+  }
+
+  // Jika regex gagal menemukan pola ayat (misal teksnya tidak ada angka), kembalikan utuh
+  if (verses.length === 0 && cleanText.trim().length > 0) {
+    verses.push({
+      id: "1",
+      verseId: "1",
+      content: cleanText.trim()
+    });
   }
 
   return verses;
@@ -193,7 +199,6 @@ export async function fetchPassageAndParse(
   }
 
   try {
-    // Tambahkan parameter wajib YouVersion: ?format=html agar teks memiliki tag <span class="v">
     const separator = youversionPath.includes('?') ? '&' : '?';
     const fallbackUrl = `${YOUVERSION_BASE}${youversionPath}${separator}format=html`;
     
@@ -211,7 +216,6 @@ export async function fetchPassageAndParse(
     const yvData: any = await response.json()
     let structuredVerses: any[] = []
 
-    // Skenario 1: YouVersion memberikan array verses asli
     if (yvData.data && Array.isArray(yvData.data.verses) && yvData.data.verses.length > 0) {
       structuredVerses = yvData.data.verses.map((v: any) => ({
          id: v.id || v.verseId || '',
@@ -219,12 +223,30 @@ export async function fetchPassageAndParse(
          content: v.content || v.text || ''
       }))
     } 
-    // Skenario 2: YouVersion mengembalikan satu string HTML panjang (content)
     else if (yvData.content || (yvData.data && yvData.data.content)) {
       const rawContent = yvData.content || yvData.data.content
-      structuredVerses = parseVersesFromHtml(rawContent)
       
-      // Fallback Darurat: Jika parser HTML gagal (array kosong), kembalikan paragraf utuh sebagai "ayat 1"
+      // Coba parse sebagai HTML jika ada tag span class="v" atau "verse" atau "yv-vlbl"
+      if (rawContent.includes('class="v') || rawContent.includes('class="verse') || rawContent.includes('yv-v')) {
+        // Parse HTML dengan regex yang lebih fleksibel
+        const verseRegex = /<span class="(?:yv-vlbl|v|verse)"[^>]*>([\d-]+)<\/span>([\s\S]*?)(?=<span class="(?:yv-v|v|verse)"|$)/g;
+        let match;
+        while ((match = verseRegex.exec(rawContent)) !== null) {
+          let number = match[1].trim();
+          let content = match[2];
+          content = content.replace(/<[^>]*>/g, '').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim();
+          if (content) {
+            structuredVerses.push({ id: number, verseId: number, content: content });
+          }
+        }
+      } 
+      
+      // Fallback jika tidak ada tag HTML verse: gunakan teks polos (menggunakan parseVersesFromText)
+      if (structuredVerses.length === 0) {
+        structuredVerses = parseVersesFromText(rawContent);
+      }
+      
+      // Fallback Darurat: Jika semua gagal, jadikan satu ayat
       if (structuredVerses.length === 0) {
         structuredVerses = [{
           id: "1",
