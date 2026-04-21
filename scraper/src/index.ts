@@ -141,49 +141,61 @@ const COUNTRY_MAP: Record<string, any> = {
 async function discoverBiblesAndLanguages() {
   console.log('--- Level 1: Discovering Bibles, Languages & Countries ---')
   
-  // 1. Fetch ALL Bibles dengan pagination
-  console.log('Fetching all bibles globally...')
-  const allBiblesRaw = await fetchAllPages('/bibles')
-  console.log(`Found ${allBiblesRaw.length} total bibles in YouVersion.`)
-
-  // 2. Filter: Wajib punya GEN (Kejadian) dan MAT (Matius)
-  const completeBibles = allBiblesRaw.filter((b: any) => {
-    if (!b.books || !Array.isArray(b.books)) return false
-    return b.books.includes('GEN') && b.books.includes('MAT')
-  })
-  console.log(`${completeBibles.length} bibles have complete OT+NT.`)
-
-  // 3. Kelompokkan berdasarkan bahasa & ambil Top 3
-  const biblesByLang: Record<string, any[]> = {}
-  const langMetadata: Record<string, any> = {}
-
-  for (const bible of completeBibles) {
-    // YouVersion Bible object biasanya punya .language (objek) atau .language_tag (string)
-    // Sesuai format API v1: bible.language adalah object { id, tag, name, local_name, countries }
-    const langObj = bible.language || {}
-    const tag = (langObj.tag || langObj.id || bible.language_tag || 'unknown').toLowerCase()
-    
-    if (tag === 'unknown') continue
-
-    if (!biblesByLang[tag]) {
-      biblesByLang[tag] = []
-      langMetadata[tag] = langObj
-    }
-    biblesByLang[tag].push(bible)
-  }
+  // 1. Ambil daftar bahasa mentah dari /languages (Karena /bibles global ditolak 422 oleh YouVersion)
+  console.log('Fetching raw languages list...')
+  const allLangsRaw = await fetchAllPages('/languages')
+  console.log(`Found ${allLangsRaw.length} raw languages.`)
 
   const forcedLangs = PRIORITY_LANGUAGES.map(l => l.trim().toLowerCase())
-  const availableLangTags = Object.keys(biblesByLang)
   
-  // Sortir bahasa berdasarkan jumlah Alkitab yang tersedia (sebagai proxy popularitas)
-  availableLangTags.sort((a, b) => biblesByLang[b].length - biblesByLang[a].length)
+  // Sortir bahasa berdasarkan populasi untuk mendapatkan yang paling umum
+  const sortedLangs = [...allLangsRaw].sort((a: any, b: any) => {
+    const popA = a.speaking_population || a.writing_population || 0
+    const popB = b.speaking_population || b.writing_population || 0
+    return popB - popA
+  })
 
-  const dynamicLangs = availableLangTags
-    .filter(tag => !forcedLangs.includes(tag))
+  // Ambil tag bahasa dinamis yang populer
+  const dynamicLangs = sortedLangs
+    .map((l: any) => (l.tag || l.id || l.language || '').toLowerCase())
+    .filter(tag => tag && !forcedLangs.includes(tag))
     .slice(0, MAX_DYNAMIC)
 
   const targetLanguages = [...new Set([...forcedLangs, ...dynamicLangs])]
   console.log(`Selected target languages: ${targetLanguages.join(', ')}`)
+
+  const biblesByLang: Record<string, any[]> = {}
+  const langMetadata: Record<string, any> = {}
+
+  // Simpan metadata asli dari /languages untuk referensi negara
+  for (const lang of allLangsRaw) {
+      const tag = (lang.tag || lang.id || lang.language || '').toLowerCase()
+      if (targetLanguages.includes(tag)) {
+          langMetadata[tag] = lang
+      }
+  }
+
+  // 2. Fetch Bibles HANYA untuk bahasa yang terpilih
+  let totalCompleteBibles = 0;
+  for (const tag of targetLanguages) {
+      console.log(`Fetching bibles for language: ${tag}`)
+      const biblesForLang = await fetchAllPages(`/bibles?language_ranges[]=${tag}`)
+      
+      // Filter: Wajib punya GEN (Kejadian) dan MAT (Matius)
+      const validBibles = biblesForLang.filter((b: any) => {
+        if (!b.books || !Array.isArray(b.books)) return false
+        return b.books.includes('GEN') && b.books.includes('MAT')
+      })
+      
+      if (validBibles.length > 0) {
+          biblesByLang[tag] = validBibles
+          totalCompleteBibles += validBibles.length
+      } else {
+          console.log(`No complete bibles found for ${tag}.`)
+      }
+  }
+
+  console.log(`${totalCompleteBibles} bibles have complete OT+NT.`)
 
   const finalBibles: any[] = []
   const finalLanguages: any[] = []
@@ -197,7 +209,7 @@ async function discoverBiblesAndLanguages() {
     finalBibles.push(...top3)
 
     // Susun metadata bahasa yang bersih
-    const rawLang = langMetadata[tag]
+    const rawLang = langMetadata[tag] || {}
     const langEntry = {
       id: rawLang.id || tag,
       tag: tag,
@@ -206,6 +218,13 @@ async function discoverBiblesAndLanguages() {
       countries: rawLang.countries || [],
       bible_count: top3.length
     }
+    
+    // Coba ambil local_name dari display_names jika ada
+    if (rawLang.display_names) {
+        langEntry.name = rawLang.display_names['en'] || langEntry.name;
+        langEntry.local_name = rawLang.display_names[tag] || langEntry.local_name;
+    }
+
     finalLanguages.push(langEntry)
 
     // Susun pemetaan Negara
