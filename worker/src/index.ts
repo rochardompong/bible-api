@@ -272,6 +272,20 @@ app.get('/', (c) => {
 
 app.get('/languages', (c) => fetchWithFallback(c, 'languages/index.json', '/languages'))
 
+app.get('/countries', async (c) => {
+  const bucket = c.env.BIBLE_CACHE
+  if (bucket) {
+    const cached = await bucket.get('countries/index.json')
+    if (cached) {
+      const headers = new Headers()
+      cached.writeHttpMetadata(headers)
+      headers.set('etag', cached.httpEtag)
+      return new Response(cached.body, { headers })
+    }
+  }
+  return createErrorResponse(c, 404, 'NOT_FOUND', 'Countries index not found in R2. Please run the scraper.')
+})
+
 app.get('/bibles', (c) => fetchWithFallback(c, 'bibles/index.json', '/bibles'))
 
 app.get('/bibles/:bible_id', (c) => {
