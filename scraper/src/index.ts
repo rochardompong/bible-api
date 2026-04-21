@@ -332,7 +332,7 @@ async function scrapeChapters(state: ScraperState) {
 }
 
 async function generateIndex(state: ScraperState) {
-  console.log('--- Level 4: Generating /index ---')
+  console.log('--- Level 4: Generating /index (Native YouVersion) ---')
   const biblesData = await getFromR2('bibles/index.json')
   const bibles = biblesData ? biblesData.data : []
   
@@ -342,26 +342,11 @@ async function generateIndex(state: ScraperState) {
 
   for (let i = startIdx; i < bibles.length; i++) {
     const bibleId = bibles[i].id
-    const booksData = await getFromR2(`bibles/${bibleId}/books.json`)
-    const books = booksData ? booksData.data : []
+    console.log(`-- Fetching Native Index for Bible ${bibleId} --`)
     
-    const customIndex: any = { bible_id: bibleId, books: [] }
-    
-    if (books && books.length > 0) {
-      for (const book of books) {
-        const chaptersData = await getFromR2(`bibles/${bibleId}/books/${book.id}/chapters.json`)
-        if (chaptersData && chaptersData.data) {
-          customIndex.books.push({
-            book_id: book.id,
-            name: book.name,
-            chapters: chaptersData.data.map((ch: any) => ch.id)
-          })
-        }
-      }
-    }
-    
-    if (customIndex.books.length > 0) {
-      await saveToR2(`bibles/${bibleId}/index.json`, { data: customIndex })
+    const indexData = await fetchFromYV(`/bibles/${bibleId}/index`)
+    if (indexData) {
+       await saveToR2(`bibles/${bibleId}/index.json`, indexData) // Langsung simpan JSON utuh
     }
     
     state.progress.bible_index = i + 1
