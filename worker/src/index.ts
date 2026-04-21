@@ -1,6 +1,6 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { createErrorResponse, fetchWithFallback, YOUVERSION_BASE, shouldTrack } from './hybrid-fetcher'
+import { createErrorResponse, fetchWithFallback, fetchPassageAndParse, YOUVERSION_BASE, shouldTrack } from './hybrid-fetcher'
 
 export type Env = {
   BIBLE_CACHE: R2Bucket
@@ -406,7 +406,7 @@ app.get('/bibles/:bible_id/chapters/:chapter_id', (c) => {
 
 app.get('/bibles/:bible_id/passages/:passage_id', (c) => {
   const { bible_id, passage_id } = c.req.param()
-  return fetchWithFallback(c, `bibles/${bible_id}/passages/${passage_id}.json`, `/bibles/${bible_id}/passages/${passage_id}`)
+  return fetchPassageAndParse(c, `bibles/${bible_id}/passages/${passage_id}.json`, `/bibles/${bible_id}/passages/${passage_id}`)
 })
 
 app.get('/verse_of_the_day/:year', (c) => {
