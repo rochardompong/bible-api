@@ -44,7 +44,7 @@ app.use('*', async (c, next) => {
   // Skip admin paths from rate limiting
   if (c.req.path.startsWith('/admin')) return next()
 
-  const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1'
+  const ip = c.req.header('CF-Connecting-IP')
   const windowMinute = Math.floor(Date.now() / 60000)
   
   const isLazyEndpoint = c.req.path.includes('/verses') || c.req.path.includes('/passages')
@@ -429,9 +429,9 @@ app.get('/verse_of_the_day/:year', (c) => {
   return fetchWithFallback(c, `verse_of_the_day/${year}.json`, `/verse_of_the_days?year=${year}`)
 })
 
-app.get('/verse_of_the_day/:year/:day', (c) => {
-  const { year, day } = c.req.param()
-  return fetchWithFallback(c, `verse_of_the_day/${year}/${day}.json`, `/verse_of_the_days/${day}?year=${year}`)
+app.get('/verse_of_the_day/:year/:month/:day', (c) => {
+  const { year, month, day } = c.req.param()
+  return fetchWithFallback(c, `verse_of_the_day/${year}/${month}/${day}.json`, `/verse_of_the_days/${month}/${day}?year=${year}`)
 })
 
 app.onError((err, c) => {
