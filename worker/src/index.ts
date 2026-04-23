@@ -431,7 +431,19 @@ app.get('/verse_of_the_day/:year', (c) => {
 
 app.get('/verse_of_the_day/:year/:month/:day', (c) => {
   const { year, month, day } = c.req.param()
-  return fetchWithFallback(c, `verse_of_the_day/${year}/${month}/${day}.json`, `/verse_of_the_days/${month}/${day}?year=${year}`)
+  
+  // Hitung Day of Year (1-366) agar cocok dengan format YouVersion & Scraper
+  const date = new Date(parseInt(year), parseInt(month) - 1, parseInt(day))
+  const start = new Date(date.getFullYear(), 0, 0)
+  const diff = date.getTime() - start.getTime()
+  const oneDay = 1000 * 60 * 60 * 24
+  const dayOfYear = Math.floor(diff / oneDay)
+
+  return fetchWithFallback(
+    c, 
+    `verse_of_the_day/${year}/${dayOfYear}.json`, 
+    `/verse_of_the_days/${dayOfYear}?year=${year}`
+  )
 })
 
 app.onError((err, c) => {
