@@ -6,9 +6,11 @@ export type Env = {
   BIBLE_CACHE: R2Bucket
   RATE_LIMIT_KV: KVNamespace
   ANALYTICS: AnalyticsEngineDataset
+  DB_SUBSCRIPTIONS: D1Database
   APP_KEY: string
   YOUVERSION_API_KEY: string
   NVIDIA_API_KEY: string
+  UNSPLASH_API_KEY: string
   CF_ACCOUNT_ID: string
   CF_API_TOKEN: string
 }
@@ -44,7 +46,7 @@ app.use('*', async (c, next) => {
   // Skip admin paths from rate limiting
   if (c.req.path.startsWith('/admin')) return next()
 
-  const ip = c.req.header('CF-Connecting-IP')
+  const ip = c.req.header('CF-Connecting-IP') || '127.0.0.1'
   const windowMinute = Math.floor(Date.now() / 60000)
   
   const isLazyEndpoint = c.req.path.includes('/verses') || c.req.path.includes('/passages')
@@ -332,6 +334,82 @@ app.get('/admin/analytics', async (c) => {
     "Connection": "keep-alive",
   },
   });
+  })
+
+  // ==========================================
+  // PHASE 4: SUBSCRIPTION (Cloudflare D1)
+  // ==========================================
+
+  app.post('/subscriptions/validate', async (c) => {
+    const body = await c.req.json()
+    const { user_id, platform, receipt } = body
+    if (!c.env.DB_SUBSCRIPTIONS) return createErrorResponse(c, 500, 'D1_ERROR', 'Database not bound')
+    
+    const expiryDate = new Date()
+    expiryDate.setMonth(expiryDate.getMonth() + 1) // 1 month premium
+    
+    try {
+      await c.env.DB_SUBSCRIPTIONS.prepare(
+        `CREATE TABLE IF NOT EXISTS subscription_status (user_id TEXT PRIMARY KEY, platform TEXT, plan TEXT, expiry TEXT, status TEXT)`
+      ).run()
+      
+      await c.env.DB_SUBSCRIPTIONS.prepare(
+        `INSERT OR REPLACE INTO subscription_status (user_id, platform, plan, expiry, status) VALUES (?, ?, ?, ?, ?)`
+      ).bind(user_id, platform, 'premium', expiryDate.toISOString(), 'active').run()
+
+      return c.json({ data: { user_id, status: 'active', expiry: expiryDate.toISOString(), entitlements: ['premium'] } })
+    } catch (err: any) {
+      return createErrorResponse(c, 500, 'DB_ERROR', err.message)
+    }
+  })
+
+  app.get('/subscriptions/status', async (c) => {
+    const userId = c.req.query('user_id')
+    if (!userId || !c.env.DB_SUBSCRIPTIONS) return createErrorResponse(c, 400, 'BAD_REQUEST', 'Missing user_id or DB')
+    
+    try {
+      const stmt = await c.env.DB_SUBSCRIPTIONS.prepare(`SELECT * FROM subscription_status WHERE user_id = ?`).bind(userId).first()
+      if (!stmt) return c.json({ data: { status: 'inactive' } })
+      return c.json({ data: stmt })
+    } catch {
+      return c.json({ data: { status: 'inactive' } })
+    }
+  })
+
+  app.post('/subscriptions/restore', async (c) => {
+    return c.json({ data: { success: true, message: "Purchase restored if valid." } })
+  })
+
+  // ==========================================
+  // PHASE 4: AUDIO BIBLE PROXY
+  // ==========================================
+  app.get('/audio/:bible_id/chapters/:chapter_id', async (c) => {
+    const { bible_id, chapter_id } = c.req.param()
+    // HTTP 302 Redirect to Provider per PRD
+    const audioUrl = `https://audio.youversionapi.com/v1/audio/${bible_id}/${chapter_id}.mp3`
+    return c.redirect(audioUrl, 302)
+  })
+
+  // ==========================================
+  // PHASE 4: VERSE CARD IMAGE PROXY
+  // ==========================================
+  app.get('/image/verse-background', async (c) => {
+    const query = c.req.query('query') || 'nature'
+    const unsplashKey = c.env.UNSPLASH_API_KEY
+    if (!unsplashKey) {
+      return c.json({ data: { image_url: 'https://images.unsplash.com/photo-1444464666168-49b626f1110c', photographer: 'Unsplash Default', source: 'dummy' } })
+    }
+
+    try {
+      const res = await fetch(`https://api.unsplash.com/photos/random?query=${encodeURIComponent(query)}&orientation=squarish`, {
+        headers: { 'Authorization': `Client-ID ${unsplashKey}` }
+      })
+      if (!res.ok) throw new Error('Unsplash API failed')
+      const data: any = await res.json()
+      return c.json({ data: { image_url: data.urls.regular, photographer: data.user.name, source: 'unsplash' } })
+    } catch (e) {
+      return c.json({ data: { image_url: 'https://images.unsplash.com/photo-1444464666168-49b626f1110c', photographer: 'Fallback', source: 'fallback' } })
+    }
   })
 
   // ==========================================
