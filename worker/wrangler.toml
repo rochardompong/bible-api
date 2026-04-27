@@ -1,9 +1,11 @@
-name = "bible-api"
+name = "hybrid-bible-api"
 main = "src/index.ts"
 compatibility_date = "2024-04-05"
 
 # APP_KEY = "test_key_123"
 # YOUVERSION_API_KEY = "dummy_key_for_local_test"
+# NVIDIA_API_KEY = "your_nvidia_nim_api_key_here"
+# UNSPLASH_API_KEY = "your_unsplash_api_key_here"
 
 [[r2_buckets]]
 binding = "BIBLE_CACHE"
@@ -16,3 +18,8 @@ id = "e26bd1731e9b4421b53b8c45892df420"
 [[analytics_engine_datasets]]
 binding = "ANALYTICS"
 dataset = "hybrid_bible_metrics"
+
+[[d1_databases]]
+binding = "DB_SUBSCRIPTIONS"
+database_name = "bible-subscriptions"
+database_id = "ff41a14f-ee01-4645-978a-c54a5c31f2f8"
