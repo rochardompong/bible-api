@@ -1,6 +1,5 @@
 import { Hono } from 'hono'
 import { cors } from 'hono/cors'
-import { compress } from 'hono/compress'
 import { createErrorResponse, fetchWithFallback, fetchPassageAndParse, YOUVERSION_BASE, shouldTrack } from './hybrid-fetcher'
 
 export type Env = {
@@ -22,8 +21,10 @@ const app = new Hono<{ Bindings: Env }>()
 // MIDDLEWARES
 // ==========================================
 
-// Enable Brotli/Gzip Compression globally (Phase 2/3 Performance Requirements)
-app.use('*', compress())
+// Catatan: Cloudflare Workers sudah secara otomatis mengaplikasikan Brotli/Gzip 
+// di level Edge network untuk klien yang mendukung (Accept-Encoding). 
+// Menambahkan middleware compress() di level aplikasi menyebabkan double-compression 
+// atau body stream yang corrupt di sisi Flutter Web.
 
 app.use('*', cors({
   origin: '*',
